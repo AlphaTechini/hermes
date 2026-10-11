@@ -125,6 +125,7 @@ export function toServerClient(client: PerplClient): ServerPerplClient {
     client.on("disconnected", (d) => emit({ kind: "connection", state: d.willReconnect ? "reconnecting" : "disconnected" }));
     client.on("positions", (ps) => emit({ kind: "positions", positions: ps.map(toSharedPosition) }));
     client.on("account", () => {
+      if (!client.isConnected()) return;
       void client
         .getAccount()
         .then((a) => emit({ kind: "account", account: toAccountSummary(a) }))
@@ -186,6 +187,7 @@ export function toServerClient(client: PerplClient): ServerPerplClient {
               resolve({ sn: e.sn, rq: e.rq, lb: e.lb });
             }
           },
+          // mt:3 (forwarded) first, then the order stream again once the exchange order id is known
           accepted: (e) => emit({ kind: "order", ...base(), ...(e.orderId !== undefined ? { orderId: String(e.orderId) } : {}), status: "accepted", atMs: e.atMs }),
           partially_filled: (f) => {
             emit(fillEvent(f));
@@ -224,10 +226,10 @@ export function toServerClient(client: PerplClient): ServerPerplClient {
     getAccount: async () => toAccountSummary(await client.getAccount()),
     getPositions: async () => (await client.getPositions()).map(toSharedPosition),
     getMarkPrice: (marketId) => client.getMarkPrice(marketId),
-    placeOrder: (params) => track(intentFrom(params)),
-    cancel: (params) => {
+    placeOrder: async (params) => track(intentFrom(params)),
+    cancel: async (params) => {
       const market = client.getMarketSpec(params.marketId);
-      if (!market) return Promise.reject(new PerplOrderRejectedError("unknown_market", `unknown market ${params.marketId}`));
+      if (!market) throw new PerplOrderRejectedError("unknown_market", `unknown market ${params.marketId}`);
       return track({
         marketId: params.marketId,
         type: OrderType.Cancel,

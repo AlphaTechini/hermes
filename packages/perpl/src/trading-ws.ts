@@ -456,8 +456,12 @@ export class PerplTradingSocket extends TypedEmitter<TradingSocketEvents> implem
       this.attempt = 0;
       this.authFailures = 0;
       this.startPing();
+      // accounts (fresh `lfr`!) are published before `connected`, so listeners that re-send on `connected` see them
+      this.emit("walletSnapshot", w);
+      for (const a of w.as) this.emit("account", a);
       this.emit("connected", { epoch: this._epoch, attempt, wallet: w });
       this.firstConnect?.resolve();
+      return;
     }
     this.emit("walletSnapshot", w);
     for (const a of w.as) this.emit("account", a);

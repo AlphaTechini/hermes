@@ -256,6 +256,9 @@ export class PerplClient extends TypedEmitter<PerplClientEvents> {
       await Promise.race([this.marketData.start().catch((e: Error) => this.log.warn("market data socket unavailable, using REST ticker", { error: e.message })), sleep(3000)]);
     }
     const acc = this.pinnedOrDefaultAccount();
+    if (!acc) {
+      this.emit("warning", { code: "no_exchange_account", detail: { instanceId: this.ctx.instance.id, pinned: this.o.accountId ?? null, accounts: this.getAccounts().map((a) => a.id) } });
+    }
     this.emit("connected", { accountId: acc?.id ?? null, epoch: sock.epoch });
   }
 
@@ -372,6 +375,7 @@ export class PerplClient extends TypedEmitter<PerplClientEvents> {
       const atMs = ev.at.t ?? p.at.t ?? Date.now();
       this.realizedByRq.set(ev.rq || p.rq, (this.realizedByRq.get(ev.rq || p.rq) ?? 0) + pnl);
       this.realizedEvents.push({ atMs, pnl });
+      if (this.realizedEvents.length > 5000) this.realizedEvents.splice(0, this.realizedEvents.length - 5000);
       this.emit("realized", { rq: ev.rq || p.rq, market: this.getMarketSpec(p.mkt)?.symbol ?? String(p.mkt), pnlUsd: pnl, atMs });
     }
   }
@@ -426,7 +430,7 @@ export class PerplClient extends TypedEmitter<PerplClientEvents> {
     for (const p of this.positions.values()) {
       const m = this.getMarketSpec(p.mkt);
       if (!m) continue;
-      let mark = 0;
+      let mark: number;
       try {
         mark = await this.getMarkPrice(m.id);
       } catch {
@@ -521,7 +525,7 @@ export class PerplClient extends TypedEmitter<PerplClientEvents> {
 
     let intent: OrderIntent;
     if (p.kind === "open") {
-      let lots = 0;
+      let lots: number;
       try {
         if (p.sizeBase !== undefined) lots = sizeToLots(p.sizeBase, market.sizeDecimals, "floor");
         else if (p.sizeUsd !== undefined) lots = lotsForNotional(p.sizeUsd, await this.getMarkPrice(market.id), market.sizeDecimals, "floor");

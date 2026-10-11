@@ -1,0 +1,41 @@
+{
+  "chainId": 10143,
+  "ed25519Seed": "e6ab0994f80a3abf9a1c10d8d27733d24de8c873af6bee177a93a0da5a4b0f79",
+  "timestamp": "1789000000000",
+  "nonce": "AQIDBAUGBwgJCgsMDQ4PEA",
+  "emptyBodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "rest": [
+    {
+      "method": "GET",
+      "target": "/v1/trading/account-history",
+      "body": "",
+      "canonical": "10143\nGET\n/v1/trading/account-history\n1789000000000\nAQIDBAUGBwgJCgsMDQ4PEA\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "NJ1bDXm2bouoHttoLS6jgvdgFXE28xy8QAAJKVW6YLIn-LQrd5OggW4pI28W1vmJ_K-YraqX3zHHUjWdCQaHCg"
+    },
+    {
+      "method": "GET",
+      "target": "/v1/trading/fills?page=2&count=100",
+      "body": "",
+      "canonical": "10143\nGET\n/v1/trading/fills?page=2&count=100\n1789000000000\nAQIDBAUGBwgJCgsMDQ4PEA\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "GqGOiO1yYyLlVEQJOe2SyVF5LTcX4bnjbTuCYNddmglkNaGEPJnislXLBrjFlf75ETRkgy_RCOnnPwlwthtbCA"
+    },
+    {
+      "method": "POST",
+      "target": "/v1/api-key/enroll",
+      "body": "{\"chain_id\":10143,\"address\":\"0x50B240678777451BEfd67B7e8c3b4366482ba8F9\"}",
+      "canonical": "10143\nPOST\n/v1/api-key/enroll\n1789000000000\nAQIDBAUGBwgJCgsMDQ4PEA\n80b7e34e3941a7007bc6c379e356e4352371d602be53a5bf99d59541cfded772",
+      "signature": "KilsXMhoskBde8rr3YjmT-OM5bb76uU4l3ZlgrbFzTdjTtJnG974YIixtesS8Bzkym1efXuWZdKF4n1fRiegBQ"
+    },
+    {
+      "method": "POST",
+      "target": "/v1/trading/order",
+      "body": "{}",
+      "canonical": "10143\nPOST\n/v1/trading/order\n1789000000000\nAQIDBAUGBwgJCgsMDQ4PEA\n44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "signature": "zQgbKeM7MfdVbJQOyzW3eKfE6-NKFeDBsKQrEWXDHUSS8sz1ohd8Zucrskq4UTg5zkP3clT5qB1Drq0E_SUXBQ"
+    }
+  ],
+  "signin": {
+    "canonical": "10143\ntrading-ws-signin\n1789000000000\nAQIDBAUGBwgJCgsMDQ4PEA",
+    "signature": "q9ciQP8zxUUJ17a1SW24jOFrLIAanp0rky-cpmYRygB5Bo0-upNR2Oj_IjXehgBcWeQ7bOQUuPSq7qCawIOOCg"
+  }
+}

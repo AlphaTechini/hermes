@@ -147,6 +147,10 @@ export interface RetryInfo extends Base {
 
 export interface OrderLifecycleHandlers {
   sent?(e: SentInfo): void;
+  /**
+   * mt:3 code 0 (`source: "status"`, forwarded) and then again on the first non-failure mt:24 (`source: "order"`, carries
+   * `orderId`). Either may be skipped if its frame was lost.
+   */
   accepted?(e: AcceptedInfo): void;
   partially_filled?(e: FillInfo): void;
   filled?(e: FillInfo): void;
@@ -278,6 +282,8 @@ interface Rec {
   ackOk: boolean;
   definitive: boolean;
   acceptedFired: boolean;
+  /** `accepted` was fired from the order stream (carries the exchange order id). */
+  acceptedFromOrder: boolean;
   /** A reconnect happened after the rq was first posted. */
   ambiguous: boolean;
   closes1011: number;
@@ -305,6 +311,7 @@ interface Rec {
   pendingRetryReason: string | undefined;
   closedAt: number | undefined;
   requestedLots: number;
+  timers: Set<ReturnType<typeof setTimeout>>;
 }
 
 const RESTING_FLAGS_MASK = OrderFlag.ImmediateOrCancel | OrderFlag.FillOrKill;
@@ -331,7 +338,8 @@ export class OrderTracker {
   private readonly recs = new Set<Rec>();
   private readonly bySn = new Map<number, { rec: Rec; rq: number }>();
   private readonly byRq = new Map<number, Rec>();
-  private readonly retired = new Map<number, Rec>();
+  /** Old rq -> the rq that replaced it (bounded). */
+  private readonly retired = new Map<number, number>();
   private readonly byOid = new Map<string, Rec>();
   private readonly orphanFills = new Map<string, { fills: Fill[]; at: number }>();
   private queue: Promise<void> = Promise.resolve();
@@ -384,7 +392,15 @@ export class OrderTracker {
     );
   }
 
+  /** Stop listening. Orders still in flight are settled: `timeout` (ambiguous) if sent, `failed` if never sent. */
   dispose(): void {
+    if (this.disposed) return;
+    for (const rec of [...this.recs]) {
+      if (rec.closed) continue;
+      if (rec.settled) this.closeRec(rec);
+      else if (rec.sends > 0) this.timeoutRec(rec, "the client was closed while the order was in flight; reconcile through REST", true);
+      else this.failRec(rec, { source: "socket", code: "client_closed", message: "the client was closed before the order was sent" });
+    }
     this.disposed = true;
     for (const off of this.offs) off();
     this.offs.length = 0;
@@ -503,6 +519,7 @@ export class OrderTracker {
       ackOk: false,
       definitive: false,
       acceptedFired: false,
+      acceptedFromOrder: false,
       ambiguous: false,
       closes1011: 0,
       sr32Retried: false,
@@ -529,6 +546,7 @@ export class OrderTracker {
       pendingRetryReason: undefined,
       closedAt: undefined,
       requestedLots: intent.size,
+      timers: new Set(),
     };
     return rec;
   }
@@ -723,24 +741,32 @@ export class OrderTracker {
     }
     const rec = this.byRq.get(o.rq);
     if (!rec) {
-      const old = this.retired.get(o.rq);
-      if (old) this.onRetiredRqOrder(old, o);
+      const current = this.retired.get(o.rq);
+      if (current !== undefined) this.onRetiredRqOrder(current, o);
       return;
     }
     if (o.acc && o.acc !== rec.accountId) return;
     if (rec.closed) return;
     if (rec.rq !== o.rq) {
-      this.onRetiredRqOrder(rec, o);
+      this.onRetiredRqOrder(rec.rq, o);
       return;
     }
     this.applyOrder(rec, o);
   }
 
-  private onRetiredRqOrder(rec: Rec, o: Order): void {
+  private onRetiredRqOrder(currentRq: number, o: Order): void {
     if (o.st === OrderStatus.Failed) return; // late failure of a retried rq: ignore
     if (isNonFailureOrder(o)) {
-      this.onWarning?.("retired_rq_became_active", { rq: o.rq, currentRq: rec.rq, st: o.st, oid: o.oid });
-      this.log.warn("a retired rq reported a non-failure status; possible duplicate exposure", { rq: o.rq, currentRq: rec.rq, st: o.st });
+      this.onWarning?.("retired_rq_became_active", { rq: o.rq, currentRq, st: o.st, oid: o.oid });
+      this.log.warn("a retired rq reported a non-failure status; possible duplicate exposure", { rq: o.rq, currentRq, st: o.st });
+    }
+  }
+
+  private retire(oldRq: number, currentRq: number): void {
+    this.retired.set(oldRq, currentRq);
+    if (this.retired.size > 5000) {
+      const first = this.retired.keys().next();
+      if (!first.done) this.retired.delete(first.value);
     }
   }
 
@@ -793,9 +819,11 @@ export class OrderTracker {
     rec.lastOrder = o;
     rec.phase = "open";
     this.safe(() => rec.handlers.order?.(o, { rq: rec.rq, atMs: t, tag: rec.intent.tag }));
-    if (!rec.acceptedFired) {
+    if (!rec.acceptedFromOrder) {
+      // fires a second time after the mt:3 ack so that callers learn the exchange order id
+      rec.acceptedFromOrder = true;
       rec.acceptedFired = true;
-      rec.acceptedAt = t;
+      rec.acceptedAt ??= t;
       this.safe(() => rec.handlers.accepted?.({ rq: rec.rq, source: "order", orderId: o.oid || undefined, atMs: t, tag: rec.intent.tag }));
     }
 
@@ -808,7 +836,10 @@ export class OrderTracker {
     }
 
     if (o.st === OrderStatus.PartiallyFilled && isImmediate(rec.intent)) {
-      rec.iocSettleAt ??= t + this.o.iocSettleMs;
+      if (rec.iocSettleAt === undefined) {
+        rec.iocSettleAt = t + this.o.iocSettleMs;
+        this.after(rec, this.o.iocSettleMs, () => this.settleIoc(rec));
+      }
       return;
     }
     if (o.st === OrderStatus.Open || o.st === OrderStatus.Untriggered || o.st === OrderStatus.Triggered || o.st === OrderStatus.PartiallyFilled) {
@@ -880,7 +911,10 @@ export class OrderTracker {
     const t = this.now();
     const fillsComplete = rec.cumulativeLots >= o.fs;
     if (!fillsComplete && !graceExpired) {
-      rec.graceUntil ??= t + this.o.fillGraceMs;
+      if (rec.graceUntil === undefined) {
+        rec.graceUntil = t + this.o.fillGraceMs;
+        this.after(rec, this.o.fillGraceMs, () => this.evaluateTerminal(rec, true));
+      }
       return;
     }
     if (!fillsComplete) {
@@ -923,6 +957,9 @@ export class OrderTracker {
     rec.phase = "retry_wait";
     rec.pendingRetryReason = reason;
     rec.retryAt = this.now() + this.o.retryBackoffMs;
+    this.after(rec, this.o.retryBackoffMs, () => {
+      if (rec.phase === "retry_wait") this.runRetry(rec);
+    });
     if (refreshLfr && this.refreshAccounts) {
       void this.refreshAccounts()
         .then((accs) => this.setAccounts(accs))
@@ -941,7 +978,7 @@ export class OrderTracker {
       return;
     }
     const oldRq = rec.rq;
-    this.retired.set(oldRq, rec);
+    this.retire(oldRq, oldRq);
     this.safe(() => rec.handlers.retry?.({ rq: oldRq, oldRq, reason, atMs: this.now(), tag: rec.intent.tag }));
     void this.dispatch(rec, "new_rq");
   }
@@ -1002,9 +1039,10 @@ export class OrderTracker {
 
   private onConnected(): void {
     for (const rec of this.recs) {
-      if (rec.closed || rec.phase === "reconciling" || rec.phase === "retry_wait") continue;
+      if (rec.closed || rec.phase === "reconciling" || rec.phase === "retry_wait" || rec.phase === "queued") continue;
       if (rec.sends === 0) {
-        if (rec.phase === "awaiting" || rec.phase === "queued") void this.dispatch(rec, rec.rq === 0 ? "initial" : "resend");
+        // a send attempted while the socket was down: it never reached the wire, send it now (same rq)
+        if (rec.rq !== 0) void this.dispatch(rec, "resend");
         continue;
       }
       if (!rec.definitive) {
@@ -1046,11 +1084,7 @@ export class OrderTracker {
         continue;
       }
       if (rec.iocSettleAt !== undefined && t >= rec.iocSettleAt) {
-        rec.iocSettleAt = undefined;
-        if (rec.cumulativeLots > 0) {
-          this.settleWith(rec, "partially_filled", undefined);
-          this.closeRec(rec);
-        }
+        this.settleIoc(rec);
         continue;
       }
       if (rec.phase === "reconciling" || rec.sends === 0) {
@@ -1081,6 +1115,15 @@ export class OrderTracker {
     if (this.recs.size === 0 && this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = undefined;
+    }
+  }
+
+  private settleIoc(rec: Rec): void {
+    rec.iocSettleAt = undefined;
+    if (rec.closed || rec.terminalOrder) return;
+    if (rec.cumulativeLots > 0) {
+      this.settleWith(rec, "partially_filled", undefined);
+      this.closeRec(rec);
     }
   }
 
@@ -1143,12 +1186,24 @@ export class OrderTracker {
     rec.outcome.resolve(this.buildOutcome(rec, status, extra ?? {}));
   }
 
+  /** Exact-time callback owned by an order; cleared when the order closes. */
+  private after(rec: Rec, ms: number, fn: () => void): void {
+    const t = setTimeout(() => {
+      rec.timers.delete(t);
+      if (!rec.closed) fn();
+    }, ms);
+    (t as unknown as { unref?: () => void }).unref?.();
+    rec.timers.add(t);
+  }
+
   private closeRec(rec: Rec): void {
     if (rec.closed) return;
+    for (const t of rec.timers) clearTimeout(t);
+    rec.timers.clear();
     rec.closed = true;
     rec.phase = "done";
     rec.closedAt = this.now();
-    for (const rq of rec.rqs) if (rq !== rec.rq) this.retired.set(rq, rec);
+    for (const rq of rec.rqs) if (rq !== rec.rq) this.retire(rq, rec.rq);
   }
 
   private failRec(rec: Rec, f: Omit<FailureInfo, "rq" | "atMs" | "tag">): void {
