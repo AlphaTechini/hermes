@@ -62,13 +62,13 @@
 
         <!-- KPIs -->
         <div class="span-8 col g4">
-          <section class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))" aria-label="Key numbers">
+          <section class="kpis k3" aria-label="Key numbers">
             <div class="kpi"><div class="kpi-label">Fill rate</div><div class="kpi-value">91.2<span class="u">%</span></div><div class="kpi-sub">135 of 148 eligible alerts</div></div>
             <div class="kpi"><div class="kpi-label">Median alert to fill</div><div class="kpi-value">486<span class="u">ms</span></div><div class="kpi-sub"><svg data-i="arrow-down" class="pos"></svg><span class="d pos">38 ms</span> faster than prior 7d</div></div>
             <div class="kpi"><div class="kpi-label">p95 alert to fill</div><div class="kpi-value">871<span class="u">ms</span></div><div class="kpi-sub">Slowest <span class="d secondary">1.42 s</span></div></div>
-            <div class="kpi" style="border-left:0;border-top:1px solid var(--border-subtle)"><div class="kpi-label">Median slippage</div><div class="kpi-value">4.1<span class="u">bps</span></div><div class="kpi-sub">p95 <span class="d secondary">9.8 bps</span> · cap 30 bps</div></div>
-            <div class="kpi" style="border-top:1px solid var(--border-subtle)"><div class="kpi-label">Realized PnL</div><div class="kpi-value pos">+$1,284.50</div><div class="kpi-sub">Slippage cost <span class="d secondary">&minus;$71.40</span> · fees <span class="d secondary">&minus;$42.18</span></div></div>
-            <div class="kpi" style="border-top:1px solid var(--border-subtle)"><div class="kpi-label">Stopped</div><div class="kpi-value">22</div><div class="kpi-sub"><span class="warn">9 blocked</span> by limits · <span class="neg">13 missed</span></div></div>
+            <div class="kpi"><div class="kpi-label">Median slippage</div><div class="kpi-value">4.1<span class="u">bps</span></div><div class="kpi-sub">p95 <span class="d secondary">9.8 bps</span> · cap 30 bps</div></div>
+            <div class="kpi"><div class="kpi-label">Realized PnL</div><div class="kpi-value pos">+$1,284.50</div><div class="kpi-sub">Slippage cost <span class="d secondary">&minus;$71.40</span> · fees <span class="d secondary">&minus;$42.18</span></div></div>
+            <div class="kpi"><div class="kpi-label">Stopped</div><div class="kpi-value">22</div><div class="kpi-sub"><span class="warn">9 blocked</span> by limits · <span class="neg">13 missed</span></div></div>
           </section>
 
           <section class="card" style="flex:1">
@@ -77,7 +77,7 @@
               <span class="card-meta">Every 6 hours</span>
               <div class="actions chart-legend"><span><i></i>Median</span><span><i class="l2"></i>p95</span></div>
             </div>
-            <div class="chart-wrap" id="lat-wrap"><svg class="chart" id="lat" viewBox="0 0 760 220" style="height:auto"></svg><div class="chart-tip" id="lat-tip"><div class="tip"></div></div></div>
+            <div class="chart-wrap" id="lat-wrap"><svg class="chart" id="lat" style="height:220px"></svg><div class="chart-tip" id="lat-tip"><div class="tip"></div></div></div>
           </section>
         </div>
       </div>
@@ -85,8 +85,8 @@
       <div class="grid-12">
         <section class="card span-6">
           <div class="card-head"><span class="card-title">Slippage distribution</span><span class="card-meta">135 fills · bps worse than the alert price</span></div>
-          <div class="chart-wrap" id="hist-wrap" style="flex:1;display:flex;align-items:center"><svg class="chart" id="hist" viewBox="0 0 560 220" style="height:auto"></svg><div class="chart-tip" id="hist-tip"><div class="tip"></div></div></div>
-          <div class="appr-stats" style="grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border-subtle)">
+          <div class="chart-wrap" id="hist-wrap" style="flex:1;display:flex;align-items:center"><svg class="chart" id="hist" style="height:220px"></svg><div class="chart-tip" id="hist-tip"><div class="tip"></div></div></div>
+          <div class="appr-stats k3s" style="border-top:1px solid var(--border-subtle)">
             <div><span class="l">Better than alert</span><span class="v">6 <span class="muted xs">4.4%</span></span></div>
             <div><span class="l">Within 5 bps</span><span class="v">80 <span class="muted xs">59.3%</span></span></div>
             <div><span class="l">Over 10 bps</span><span class="v">9 <span class="muted xs">6.7%</span></span></div>
@@ -99,14 +99,14 @@
             <table class="t">
               <thead><tr><th>Reason</th><th>Kind</th><th class="num">Alerts</th><th class="hide-sm">Share</th><th class="num hide-sm">Last</th></tr></thead>
               <tbody>
-                <tr class="clickable"><td>No liquidity within max slippage</td><td><span class="pill negative outline">Missed</span></td><td class="num">6</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:27%"></i></span><span class="mono xs muted">27%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
-                <tr class="clickable"><td>Perpl rejected: insufficient margin</td><td><span class="pill negative outline">Missed</span></td><td class="num">4</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:18%"></i></span><span class="mono xs muted">18%</span></span></td><td class="num muted hide-sm">9 Oct</td></tr>
-                <tr class="clickable"><td>Over max position size</td><td><span class="pill warning outline">Blocked</span></td><td class="num">3</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:14%"></i></span><span class="mono xs muted">14%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
-                <tr class="clickable"><td>Daily loss stop reached</td><td><span class="pill warning outline">Blocked</span></td><td class="num">3</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:14%"></i></span><span class="mono xs muted">14%</span></span></td><td class="num muted hide-sm">8 Oct</td></tr>
-                <tr class="clickable"><td>Approval expired</td><td><span class="pill negative outline">Missed</span></td><td class="num">2</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:9%"></i></span><span class="mono xs muted">9%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
-                <tr class="clickable"><td>Duplicate alert id</td><td><span class="pill outline">Ignored</span></td><td class="num">2</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:9%"></i></span><span class="mono xs muted">9%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
-                <tr class="clickable"><td>Market not allowed</td><td><span class="pill warning outline">Blocked</span></td><td class="num">1</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:4.5%"></i></span><span class="mono xs muted">5%</span></span></td><td class="num muted hide-sm">6 Oct</td></tr>
-                <tr class="clickable"><td>No answer before last block</td><td><span class="pill negative outline">Missed</span></td><td class="num">1</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:4.5%"></i></span><span class="mono xs muted">5%</span></span></td><td class="num muted hide-sm">5 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">No liquidity within max slippage</td><td><span class="pill negative outline">Missed</span></td><td class="num">6</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:27%"></i></span><span class="mono xs muted">27%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Perpl rejected: insufficient margin</td><td><span class="pill negative outline">Missed</span></td><td class="num">4</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:18%"></i></span><span class="mono xs muted">18%</span></span></td><td class="num muted hide-sm">9 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Over max position size</td><td><span class="pill warning outline">Blocked</span></td><td class="num">3</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:14%"></i></span><span class="mono xs muted">14%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Daily loss stop reached</td><td><span class="pill warning outline">Blocked</span></td><td class="num">3</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:14%"></i></span><span class="mono xs muted">14%</span></span></td><td class="num muted hide-sm">8 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Approval expired</td><td><span class="pill negative outline">Missed</span></td><td class="num">2</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:9%"></i></span><span class="mono xs muted">9%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Duplicate alert id</td><td><span class="pill outline">Ignored</span></td><td class="num">2</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:9%"></i></span><span class="mono xs muted">9%</span></span></td><td class="num muted hide-sm">11 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">Market not allowed</td><td><span class="pill warning outline">Blocked</span></td><td class="num">1</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:4.5%"></i></span><span class="mono xs muted">5%</span></span></td><td class="num muted hide-sm">6 Oct</td></tr>
+                <tr class="clickable"><td class="wrap-cell">No answer before last block</td><td><span class="pill negative outline">Missed</span></td><td class="num">1</td><td class="hide-sm"><span class="share"><span class="meter"><i style="width:4.5%"></i></span><span class="mono xs muted">5%</span></span></td><td class="num muted hide-sm">5 Oct</td></tr>
               </tbody>
             </table>
           </div>
@@ -118,11 +118,12 @@
 </div>
 
 <script>
-/* ---------- Slippage histogram (single series, one hue) ---------- */
-(function () {
+/* ---------- Slippage histogram (single series, one hue) ----------
+   Charts render at the container's pixel width so 11px labels stay 11px. */
+function drawHist() {
   const bins = ['<0','0','1','2','3','4','5','6','7','8','9','10','11','12+'];
   const counts = [6, 9, 12, 16, 19, 18, 14, 11, 9, 7, 5, 4, 3, 2];
-  const W = 560, H = 220, L = 32, R = 8, T = 12, B = 28, max = 20;
+  const W = Math.max(300, document.getElementById('hist-wrap').clientWidth - 32), H = 220, L = 32, R = 8, T = 12, B = 28, max = 20;
   const iw = W - L - R, ih = H - T - B, bw = iw / bins.length, barW = Math.min(24, bw - 6);
   let s = '<g class="grid">';
   [0, 5, 10, 15, 20].forEach(v => { const y = T + ih - (v / max) * ih; s += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/>`; s += `</g><text x="${L - 8}" y="${y + 4}" text-anchor="end">${v}</text><g class="grid">`; });
@@ -132,38 +133,38 @@
     const path = `M${x},${T + ih} V${y + r} Q${x},${y} ${x + r},${y} H${x + barW - r} Q${x + barW},${y} ${x + barW},${y + r} V${T + ih} Z`;
     s += `<path class="bar${i === 0 ? ' better' : ''}" d="${path}" data-bin="${i}"/>`;
     s += `<rect x="${L + i * bw}" y="${T}" width="${bw}" height="${ih}" fill="transparent" data-hit="${i}"/>`;
-    s += `<text x="${L + i * bw + bw / 2}" y="${H - 10}" text-anchor="middle">${bins[i]}</text>`;
+    if (bw >= 26 || i % 2 === 0) s += `<text x="${L + i * bw + bw / 2}" y="${H - 10}" text-anchor="middle">${bins[i]}</text>`;
   });
   // median marker at 4.1 bps -> bin index 5 (value 4) + 0.1
-  const mx = L + (5 + 0.1) * bw;
+  const mx = L + (5 + 0.1) * bw; // median 4.1 bps sits 0.1 into the 4 to 5 bin
   s += `<line x1="${mx}" x2="${mx}" y1="${T}" y2="${T + ih}" stroke="var(--text-secondary)" stroke-width="1"/>`;
   s += `<text x="${mx + 6}" y="${T + 10}" style="fill:var(--text-secondary)">median 4.1</text>`;
   s += `<line x1="${L}" x2="${W - R}" y1="${T + ih}" y2="${T + ih}" stroke="var(--chart-axis)"/>`;
-  const svg = document.getElementById('hist'); svg.innerHTML = s;
+  const svg = document.getElementById('hist'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
   const tip = document.getElementById('hist-tip'), wrap = document.getElementById('hist-wrap');
-  svg.addEventListener('mousemove', e => {
+  svg.onmousemove = e => {
     const hit = e.target.getAttribute && e.target.getAttribute('data-hit'); if (hit == null) { tip.classList.remove('on'); return; }
     const i = +hit, r = svg.getBoundingClientRect(), wr = wrap.getBoundingClientRect(), k = r.width / W;
     tip.querySelector('.tip').innerHTML = `<b>${counts[i]} fills</b><span>${i === 0 ? 'better than alert' : i === 13 ? '12 bps or more' : bins[i] + ' to ' + (+bins[i] + 1) + ' bps worse'}</span>`;
     tip.style.left = (r.left - wr.left + (L + i * bw + bw / 2) * k) + 'px';
     tip.style.top = (r.top - wr.top + (T + ih - (counts[i] / max) * ih) * k) + 'px';
     tip.classList.add('on');
-  });
-  svg.addEventListener('mouseleave', () => tip.classList.remove('on'));
-})();
+  };
+  svg.onmouseleave = () => tip.classList.remove('on');
+}
 
 /* ---------- Latency line chart: median + p95, one y axis (ms) ---------- */
-(function () {
+function drawLat() {
   const med = [512,498,470,455,530,505,488,472,461,520,610,540,495,480,470,466,489,502,476,459,463,491,478,470,452,468,481,486];
   const p95 = [880,842,801,790,930,905,860,820,812,890,1420,980,870,850,820,815,860,880,835,810,812,862,840,826,798,820,851,871];
-  const W = 760, H = 220, L = 40, R = 12, T = 12, B = 28, max = 1500;
+  const W = Math.max(300, document.getElementById('lat-wrap').clientWidth - 32), H = 220, L = 40, R = 12, T = 12, B = 28, max = 1500;
   const iw = W - L - R, ih = H - T - B, n = med.length;
   const X = i => L + (i / (n - 1)) * iw, Y = v => T + ih - (v / max) * ih;
   let s = '<g class="grid">';
   [0, 500, 1000, 1500].forEach(v => { s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`; });
   s += '</g>';
   [0, 500, 1000, 1500].forEach(v => { s += `<text x="${L - 8}" y="${Y(v) + 4}" text-anchor="end">${v === 1000 ? '1 s' : v === 1500 ? '1.5 s' : v}</text>`; });
-  ['4 Oct','5 Oct','6 Oct','7 Oct','8 Oct','9 Oct','10 Oct'].forEach((d, k) => { s += `<text x="${X(k * 4)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : 'middle'}">${d}</text>`; });
+  ['4 Oct','5 Oct','6 Oct','7 Oct','8 Oct','9 Oct','10 Oct'].forEach((d, k) => { if (W < 560 && (k % 2 || k === 6)) return; s += `<text x="${X(k * 4)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : 'middle'}">${d}</text>`; });
   s += `<text x="${W - R}" y="${H - 8}" text-anchor="end">11 Oct</text>`;
   const line = arr => arr.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
   s += `<path class="wash" d="${line(med)} L${X(n - 1)},${Y(0)} L${X(0)},${Y(0)} Z"/>`;
@@ -173,9 +174,9 @@
   s += `<text x="${X(10) + 8}" y="${Y(1420) + 4}" style="fill:var(--text-secondary)">1.42 s · Perpl reconnect</text>`;
   s += `<g id="xh" style="display:none"><line id="xh-l" y1="${T}" y2="${T + ih}" stroke="var(--border-strong)"/><circle id="xh-a" r="4" class="dot"/><circle id="xh-b" r="4" class="dot" style="fill:var(--chart-2)"/></g>`;
   s += `<rect x="${L}" y="${T}" width="${iw}" height="${ih}" fill="transparent" id="lat-hit"/>`;
-  const svg = document.getElementById('lat'); svg.innerHTML = s;
+  const svg = document.getElementById('lat'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = s;
   const tip = document.getElementById('lat-tip'), wrap = document.getElementById('lat-wrap');
-  svg.addEventListener('mousemove', e => {
+  svg.onmousemove = e => {
     const r = svg.getBoundingClientRect(), kx = r.width / W, ky = r.height / H;
     const i = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left) / kx - L) / iw * (n - 1))));
     const xh = document.getElementById('xh'); xh.style.display = '';
@@ -187,10 +188,13 @@
     tip.style.left = (r.left - wr().left + X(i) * kx) + 'px';
     tip.style.top = (r.top - wr().top + Y(p95[i]) * ky) + 'px';
     tip.classList.add('on');
-  });
+  };
   const wr = () => wrap.getBoundingClientRect();
-  svg.addEventListener('mouseleave', () => { tip.classList.remove('on'); document.getElementById('xh').style.display = 'none'; });
-})();
+  svg.onmouseleave = () => { tip.classList.remove('on'); document.getElementById('xh').style.display = 'none'; };
+}
+function drawAll() { drawHist(); drawLat(); }
+drawAll();
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawAll, 120); });
 </script>
 </body>
 </html>

@@ -74,6 +74,9 @@
   --warning-subtle: rgb(232 162 58 / 0.12);
   --warning-border: rgb(232 162 58 / 0.34);
 
+  /* Pipeline: completed stage segment */
+  --pipe-done: #9a9fa8;
+
   /* Charts */
   --chart-1: var(--accent);
   --chart-1-wash: rgb(77 142 255 / 0.10);
@@ -169,6 +172,8 @@
   --warning-subtle: rgb(184 110 0 / 0.08);
   --warning-border: rgb(184 110 0 / 0.30);
 
+  --pipe-done: #a3a9b1;
+
   --chart-1: var(--accent);
   --chart-1-wash: rgb(37 99 235 / 0.08);
   --chart-2: #8b919a;
@@ -252,6 +257,7 @@
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-grid: var(--chart-grid);
+  --color-pipe-done: var(--pipe-done);
 
   --font-sans: var(--font-ui);
   --font-mono: var(--font-code);

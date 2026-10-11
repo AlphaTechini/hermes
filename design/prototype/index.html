@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<body>
+<header class="ob-top">
+  <a class="brand" href="index.html"><span data-mark></span>Hermes</a>
+  <span class="env-tag" style="margin-left:0">prototype</span>
+  <div class="right"><button class="btn btn-ghost btn-icon btn-sm" data-theme-toggle aria-label="Switch theme"><svg data-i="sun"></svg></button></div>
+</header>
+<main class="content" style="max-width:880px;padding-top:48px">
+  <div class="page-head"><div class="t">
+    <h1 class="page-title">Screens</h1>
+    <p class="page-sub">Static, high-fidelity source of truth for the React app. Spec: <span class="mono">design/DESIGN.md</span>. Tokens: <span class="mono">apps/web/src/styles/tokens.css</span>. Add <span class="mono">?theme=light</span> to any page for the light theme.</p>
+  </div></div>
+  <section class="card">
+    <div class="checks">
+      <a class="chk skip" href="landing.html"><svg data-i="globe"></svg><div><div class="n" style="color:var(--text)">Landing and sign in</div><div class="d">Hero, relay visual, how it works, safety</div></div><span class="v">landing.html</span></a>
+      <a class="chk skip" href="onboarding.html?step=1"><svg data-i="list-checks"></svg><div><div class="n" style="color:var(--text)">Onboarding</div><div class="d">4 steps: <a class="link" href="onboarding.html?step=1">wallet</a>, <a class="link" href="onboarding.html?step=2">Perpl account</a>, <a class="link" href="onboarding.html?step=3">API key</a>, <a class="link" href="onboarding.html?step=4">first strategy</a></div></div><span class="v">onboarding.html?step=N</span></a>
+      <a class="chk skip" href="dashboard.html"><svg data-i="activity"></svg><div><div class="n" style="color:var(--text)">Live dashboard</div><div class="d">Status bar, alert stream with lifecycle pipeline, positions, fills</div></div><span class="v">dashboard.html</span></a>
+      <a class="chk skip" href="alert.html"><svg data-i="file-text"></svg><div><div class="n" style="color:var(--text)">Alert detail, filled</div><div class="d">Timeline, payload, order frame, Perpl messages, onchain links</div></div><span class="v">alert.html</span></a>
+      <a class="chk skip" href="alert-blocked.html"><svg data-i="octagon-x"></svg><div><div class="n" style="color:var(--text)">Alert detail, blocked</div><div class="d">The failed check and why nothing was sent</div></div><span class="v">alert-blocked.html</span></a>
+      <a class="chk skip" href="strategies.html"><svg data-i="webhook"></svg><div><div class="n" style="color:var(--text)">Strategies</div><div class="d">List and detail: webhook URL, secret, message template, test alert</div></div><span class="v">strategies.html</span></a>
+      <a class="chk skip" href="limits.html"><svg data-i="shield"></svg><div><div class="n" style="color:var(--text)">Risk limits</div><div class="d">Five limits with live usage, wallet policy, unsaved changes bar</div></div><span class="v">limits.html</span></a>
+      <a class="chk skip" href="approvals.html"><svg data-i="hand"></svg><div><div class="n" style="color:var(--text)">Approvals</div><div class="d">Pending orders with countdown, decision history</div></div><span class="v">approvals.html</span></a>
+      <a class="chk skip" href="report.html"><svg data-i="chart-column"></svg><div><div class="n" style="color:var(--text)">Report card</div><div class="d">Grade, KPIs, latency and slippage charts, blocked and missed reasons</div></div><span class="v">report.html</span></a>
+      <a class="chk skip" href="states.html"><svg data-i="layers"></svg><div><div class="n" style="color:var(--text)">Components and states</div><div class="d">Buttons, inputs, pills, skeletons, empty, toasts, modal, errors, reconnect banner</div></div><span class="v">states.html</span></a>
+    </div>
+  </section>
+</main>
+</body>
+</html>

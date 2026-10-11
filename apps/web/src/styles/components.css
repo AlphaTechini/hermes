@@ -79,7 +79,7 @@
        </div>
      States:
        pending  never reached yet (in-flight alert)       --border
-       done     completed, not the last stage             --text-secondary
+       done     completed, not the last stage             --pipe-done
        active   in progress now                           --accent + moving sheen
        final    the terminal success stage (Filled)       --positive
        blocked  stopped here by a Hermes limit            --warning
@@ -109,7 +109,7 @@
     background: var(--seg-color, transparent);
     transform-origin: left center;
   }
-  .hm-pipe__stage[data-state="done"]    { --seg-color: var(--text-secondary); }
+  .hm-pipe__stage[data-state="done"]    { --seg-color: var(--pipe-done); }
   .hm-pipe__stage[data-state="final"]   { --seg-color: var(--positive); }
   .hm-pipe__stage[data-state="blocked"] { --seg-color: var(--warning); }
   .hm-pipe__stage[data-state="failed"]  { --seg-color: var(--negative); }
@@ -161,7 +161,7 @@
     background: var(--border-strong);
   }
   .hm-pipe-dots > b { flex: 1 1 auto; height: 1px; min-width: 6px; background: var(--border); }
-  .hm-pipe-dots > i[data-state="done"]    { background: var(--text-secondary); }
+  .hm-pipe-dots > i[data-state="done"]    { background: var(--pipe-done); }
   .hm-pipe-dots > i[data-state="final"]   { background: var(--positive); }
   .hm-pipe-dots > i[data-state="blocked"] { background: var(--warning); }
   .hm-pipe-dots > i[data-state="failed"]  { background: var(--negative); }
