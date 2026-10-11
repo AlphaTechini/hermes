@@ -1,4 +1,4 @@
-import { CircleCheck, CircleX, Ellipsis, Hourglass, Send, Trash2, TriangleAlert } from "lucide-react";
+import { CircleCheck, CircleX, Ellipsis, FlaskConical, Hourglass, Send, Trash2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { MARKET_SYMBOLS, type AlertRecord, type StrategyDTO } from "@hermes/shared";
@@ -8,6 +8,7 @@ import { formatBps, formatClock, formatDate, formatFraction, formatMs, formatTab
 import { useAlert, useAlerts, useDeleteStrategy, useLimits, useReport, useSendTestAlert, useStrategy, useToggleStrategy, useUpdateStrategy } from "../../lib/queries";
 import {
   Button,
+  Callout,
   Card,
   CardBody,
   CardFooter,
@@ -32,8 +33,8 @@ import {
   useDelayedFlag,
   useToast,
 } from "../../components/ui";
-import { gradeReady } from "../report/report-data";
 import { ConnectBody } from "./ConnectBody";
+import { OutcomePill } from "./OutcomePill";
 
 const VALUE_SM = { fontSize: 20, lineHeight: "28px" } as const;
 
@@ -128,6 +129,11 @@ function Loaded({ s, marketAllowed }: { s: StrategyDTO; marketAllowed: (m: strin
               <Tag mono title={s.id}>
                 {s.id}
               </Tag>
+              {s.dryRun && (
+                <StatusPill tone="accent" icon={FlaskConical} title="Alerts run every check and stop there. Nothing is sent to Perpl.">
+                  Dry run
+                </StatusPill>
+              )}
             </div>
             <span className="xs muted">
               Created {formatDate(s.createdAt)} · <span className="mono">{r ? r.counts.total : "n/a"}</span> alerts in the last 7 days
@@ -170,6 +176,13 @@ function Loaded({ s, marketAllowed }: { s: StrategyDTO; marketAllowed: (m: strin
             </Popover>
           </div>
         </div>
+        {s.dryRun && (
+          <div style={{ padding: "0 16px 16px" }}>
+            <Callout tone="accent" icon={FlaskConical}>
+              <b>Dry run is on.</b> Alerts run every check and stop there. Nothing is sent to Perpl, so there are no fills and no grade.
+            </Callout>
+          </div>
+        )}
         <hr className="divider" />
         <KpiRow style={{ border: 0, borderRadius: "0 0 8px 8px" }}>
           <KpiTile size="sm" label="Fill rate, 7d" loading={report.isLoading} skeleton={[72, 56, 0]} value={r?.fillRate != null ? formatFraction(r.fillRate).replace("%", "") : "n/a"} unit={r?.fillRate != null ? "%" : undefined} />
@@ -182,7 +195,7 @@ function Loaded({ s, marketAllowed }: { s: StrategyDTO; marketAllowed: (m: strin
             skeleton={[48, 56, 0]}
             value={
               <span className="row g2" style={VALUE_SM}>
-                {r && gradeReady(r) ? r.grade : "n/a"}{" "}
+                {r?.grade ?? "n/a"}{" "}
                 <Link className="link xs w500" to={`/report/${s.id}`} style={{ letterSpacing: 0 }}>
                   Report card
                 </Link>
@@ -199,6 +212,7 @@ function Loaded({ s, marketAllowed }: { s: StrategyDTO; marketAllowed: (m: strin
         </CardBody>
         <CardFooter className="row between wrap g2">
           <LastTest lastTest={lastTest} />
+          <DryRunToggle s={s} />
         </CardFooter>
       </Card>
 
@@ -219,6 +233,19 @@ function LastTest({ lastTest }: { lastTest: { alertId: string; at: number } | nu
   const alert = useAlert(lastTest?.alertId);
   if (!lastTest) return <span className="muted">No test sent yet. Send one to watch it go through every check.</span>;
   const a = alert.data;
+  if (a?.status === "dry_run") {
+    return (
+      <span className="row g2 wrap">
+        <FlaskConical className="i-14 acc" aria-hidden />
+        Last test <span className="mono secondary">{formatClock(lastTest.at, { ms: false })}</span>
+        <span>passed every check, not sent (dry run)</span>
+        <span>·</span>
+        <Link className="link mono" to={`/alerts/${lastTest.alertId}`}>
+          {lastTest.alertId}
+        </Link>
+      </span>
+    );
+  }
   const out = a ? alertOutcome(a) : null;
   const ok = out?.kind === "filled" || out?.kind === "partly_filled";
   const Icon = !out || out.kind === "in_flight" ? Hourglass : ok ? CircleCheck : out.kind === "blocked" ? TriangleAlert : CircleX;
@@ -251,6 +278,35 @@ function LastTest({ lastTest }: { lastTest: { alertId: string; at: number } | nu
   );
 }
 
+// --- dry run --------------------------------------------------------------------------
+
+/** Dry run is saved the moment it changes: turning it off starts real orders, so that direction asks first. */
+function DryRunToggle({ s }: { s: StrategyDTO }) {
+  const toast = useToast();
+  const update = useUpdateStrategy(s.id);
+  const [confirmOff, setConfirmOff] = useState(false);
+  const set = (dryRun: boolean) =>
+    update.mutate(
+      { dryRun },
+      {
+        onSuccess: () => {
+          setConfirmOff(false);
+          if (dryRun) toast.accent("Dry run is on", "Alerts run every check and stop there. Nothing is sent to Perpl.", { icon: FlaskConical });
+          else toast.positive("Dry run is off", "Alerts from this strategy send real orders to Perpl.");
+        },
+        onError: (e) => toast.negative("Could not change dry run", errorMessage(e)),
+      },
+    );
+  return (
+    <>
+      <Toggle label="Dry run: checks run, nothing is sent to Perpl" labelSide="left" checked={s.dryRun} disabled={update.isPending} onCheckedChange={(on) => (on ? set(true) : setConfirmOff(true))} />
+      <ConfirmModal open={confirmOff} onClose={() => setConfirmOff(false)} title="Turn off dry run?" confirmLabel="Turn off dry run" variant="danger" loading={update.isPending} loadingLabel="Saving" onConfirm={() => set(false)}>
+        From the next alert, {s.name} sends real orders to Perpl. Alerts that pass every limit can fill.
+      </ConfirmModal>
+    </>
+  );
+}
+
 // --- order settings -------------------------------------------------------------------
 
 interface Draft {
@@ -258,8 +314,11 @@ interface Draft {
   market: string;
   sizeUsd: number | null;
   leverage: number | null;
+  /** null = use the account default from Risk limits. */
+  maxSlippageBps: number | null;
 }
-const draftOf = (s: StrategyDTO): Draft => ({ name: s.name, market: s.defaultMarket ?? "none", sizeUsd: s.defaultSizeUsd, leverage: s.defaultLeverage });
+const draftOf = (s: StrategyDTO): Draft => ({ name: s.name, market: s.defaultMarket ?? "none", sizeUsd: s.defaultSizeUsd, leverage: s.defaultLeverage, maxSlippageBps: s.maxSlippageBps });
+const ORDER_TYPE_LABEL: Record<StrategyDTO["orderType"], string> = { market: "Market, immediate or cancel" };
 
 function Defaults({ s }: { s: StrategyDTO }) {
   const toast = useToast();
@@ -273,14 +332,17 @@ function Defaults({ s }: { s: StrategyDTO }) {
     setSizeMode(saved.sizeUsd ? "fixed" : "alert");
   }, [saved]);
 
-  const dirty = d.name.trim() !== saved.name || d.market !== saved.market || (sizeMode === "alert" ? null : d.sizeUsd) !== saved.sizeUsd || d.leverage !== saved.leverage;
+  const dirty = d.name.trim() !== saved.name || d.market !== saved.market || (sizeMode === "alert" ? null : d.sizeUsd) !== saved.sizeUsd || d.leverage !== saved.leverage || d.maxSlippageBps !== saved.maxSlippageBps;
   const maxLev = limits.data?.maxLeverage;
   const errors = {
     name: d.name.trim() ? undefined : "Give the strategy a name.",
     size: sizeMode === "fixed" && (d.sizeUsd === null || d.sizeUsd <= 0) ? "Enter a size above $0, or use the size from the alert." : undefined,
     leverage: d.leverage !== null && d.leverage <= 0 ? "Leverage must be above 0x." : undefined,
+    slippage: d.maxSlippageBps !== null && (!Number.isInteger(d.maxSlippageBps) || d.maxSlippageBps < 0 || d.maxSlippageBps > 10_000) ? "Use a whole number of bps from 0 to 10,000." : undefined,
   };
-  const invalid = Boolean(errors.name || errors.size || errors.leverage);
+  const invalid = Boolean(errors.name || errors.size || errors.leverage || errors.slippage);
+  const defaultSlip = limits.data?.defaultSlippageBps;
+  const effectiveSlip = d.maxSlippageBps ?? defaultSlip;
 
   const save = () =>
     update.mutate(
@@ -289,6 +351,7 @@ function Defaults({ s }: { s: StrategyDTO }) {
         defaultMarket: d.market === "none" ? null : d.market,
         defaultSizeUsd: sizeMode === "alert" ? null : d.sizeUsd,
         defaultLeverage: d.leverage,
+        maxSlippageBps: d.maxSlippageBps,
       },
       {
         onSuccess: () => toast.positive("Settings saved", "They apply from the next alert."),
@@ -315,6 +378,43 @@ function Defaults({ s }: { s: StrategyDTO }) {
           onChange={(market) => setD({ ...d, market })}
           options={[{ value: "none", label: "From the alert" }, ...MARKET_SYMBOLS.map((m) => ({ value: m as string, label: m, market: m }))]}
           hint="Used when the message has no market."
+        />
+        <Input
+          label="Order type"
+          value={ORDER_TYPE_LABEL[s.orderType] ?? "Market, immediate or cancel"}
+          readOnly
+          aria-readonly="true"
+          boxClassName="is-disabled"
+          hint="Fills now within your slippage limit and cancels the rest. Market is the only type for now."
+        />
+        <NumberInput
+          label="Max slippage"
+          unit="bps"
+          value={d.maxSlippageBps}
+          onValueChange={(maxSlippageBps) => setD({ ...d, maxSlippageBps })}
+          min={0}
+          max={10_000}
+          decimals={0}
+          placeholder={defaultSlip === undefined ? "Default" : String(defaultSlip)}
+          boxClassName="[&_input::placeholder]:font-sans"
+          error={errors.slippage}
+          hint={
+            errors.slippage ? undefined : (
+              <>
+                {effectiveSlip === undefined ? "Worst price is the alert price plus the limit for buys, minus for sells." : `Worst price = alert price + ${effectiveSlip} bps for buys, minus for sells.`}
+                {d.maxSlippageBps === null && (
+                  <>
+                    {" "}
+                    Empty uses the default from{" "}
+                    <Link className="link" to="/limits">
+                      Risk limits
+                    </Link>
+                    .
+                  </>
+                )}
+              </>
+            )
+          }
         />
         <div className="field">
           <span className="label">Size</span>
@@ -390,8 +490,8 @@ function RecentAlerts({ strategyId }: { strategyId: string }) {
           }
           columns={[
             { key: "t", header: "Time", mono: true, cell: (a) => <span className="secondary">{formatTableTime(a.receivedAt)}</span> },
-            { key: "a", header: "Alert", cell: (a) => <span className="row g2">{a.market && <MarketChip market={a.market} />}<SideLabel side={alertSide(a)} size="xs" /></span> },
-            { key: "s", header: "Outcome", cell: (a) => <StatusPill kind={alertOutcome(a).kind} /> },
+            { key: "a", header: "Alert", cell: (a) => <span className="row g2"><SideLabel side={alertSide(a)} size="xs" />{a.market && <MarketChip market={a.market} />}</span> },
+            { key: "s", header: "Outcome", cell: (a) => <OutcomePill alert={a} /> },
             { key: "l", header: "Alert to fill", numeric: true, hideSm: true, cell: (a) => orNA(a.latencyMs, formatMs) },
             { key: "p", header: "Slippage", numeric: true, hideSm: true, cell: (a) => orNA(a.slippageBps, (v) => formatBps(v)) },
           ]}

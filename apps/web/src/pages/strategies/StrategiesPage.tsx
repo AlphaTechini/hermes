@@ -25,6 +25,7 @@ export function StrategiesPage() {
   const strategies = list.data;
   const allowedMarkets = limits.data?.allowedMarkets;
   const marketAllowed = useCallback((m: string | null) => !m || !allowedMarkets || allowedMarkets.includes(m), [allowedMarkets]);
+  const current = id ? strategies?.find((x) => x.id === id) : undefined;
   const stats = strategyStats(alerts.data?.items, startOfLocalDay(now));
 
   // Land on the first strategy; leave a stale id (deleted elsewhere) for the first one.
@@ -36,6 +37,7 @@ export function StrategiesPage() {
     <>
       <PageHeader
         title={PAGE.strategies.title}
+        documentTitle={current ? `${current.name} · ${PAGE.strategies.title}` : PAGE.strategies.title}
         subtitle={PAGE.strategies.subtitle}
         actions={
           <Button variant="primary" icon={Plus} onClick={() => setCreating(true)}>
@@ -48,7 +50,7 @@ export function StrategiesPage() {
           strategies={strategies}
           loading={list.isLoading}
           showSkeleton={slow}
-          error={list.isError}
+          error={list.isError && !list.data}
           onRetry={() => void list.refetch()}
           currentId={id}
           stats={stats}

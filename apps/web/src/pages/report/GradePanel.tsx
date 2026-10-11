@@ -1,7 +1,7 @@
 import type { ReportCard } from "@hermes/shared";
-import { formatBps, formatFraction, formatMs, formatNumber, orNA } from "../../lib/format";
-import { Card, CardBody, CardHeader, GradeBadge, GradeScale, Skeleton } from "../../components/ui";
-import { biggestDrag, eligibleAlerts, gradeReady, MIN_GRADE_ALERTS, type UiRange } from "./report-data";
+import { formatNumber } from "../../lib/format";
+import { Card, CardBody, CardHeader, GradeBadge, GradeScale, Meter, Skeleton } from "../../components/ui";
+import type { UiRange } from "./report-data";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -17,7 +17,7 @@ export function rangeLabel(r: ReportCard, range: UiRange): string {
 export function GradePanel({ report, range, loading }: { report: ReportCard | undefined; range: UiRange; loading: boolean }) {
   return (
     <Card className="span-4">
-      <CardHeader title="Grade" meta={report ? `${rangeLabel(report, range)} · ${formatNumber(eligibleAlerts(report))} eligible alerts` : undefined} />
+      <CardHeader title="Grade" meta={report ? `${rangeLabel(report, range)} · ${formatNumber(report.counts.eligible)} eligible ${report.counts.eligible === 1 ? "alert" : "alerts"}` : undefined} />
       <CardBody className="col g4">{loading || !report ? <GradeSkeleton /> : <GradeBody r={report} />}</CardBody>
     </Card>
   );
@@ -40,44 +40,54 @@ function GradeSkeleton() {
   );
 }
 
+const Chevron = () => (
+  <svg className="i-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
+
 function GradeBody({ r }: { r: ReportCard }) {
-  const ready = gradeReady(r);
-  const b = r.gradeBreakdown;
-  const drag = biggestDrag(r);
-  const rows: { name: string; weight: number; measured: string; score: number | null }[] = [
-    { name: "Fill rate", weight: b.fillRate.max, measured: orNA(b.fillRate.value, formatFraction), score: b.fillRate.points },
-    { name: "Slippage", weight: b.slippage.max, measured: orNA(b.slippage.value, (v) => formatBps(v)), score: b.slippage.points },
-    { name: "Latency", weight: b.latency.max, measured: orNA(b.latency.value, (v) => `p95 ${formatMs(v)}`), score: b.latency.points },
-    { name: "Reliability", weight: b.reliability.max, measured: b.reliability.value === null ? "n/a" : `${formatFraction(b.reliability.value)} failed`, score: b.reliability.points },
-  ];
+  const graded = r.grade !== null && r.score !== null;
+  const need = r.gradeMinEligible;
+  const have = r.counts.eligible;
   return (
     <>
-      <div className="grade">
-        <GradeBadge grade={ready ? r.grade : null} />
-        <div className="col g1">
-          {ready ? (
-            <>
-              <div className="row g2">
-                <span style={{ fontSize: 20, lineHeight: "28px", fontWeight: 500, letterSpacing: "-0.01em" }}>{formatNumber(r.score ?? 0, 1)}</span>
-                <span className="muted">/ 100</span>
-              </div>
-              <span className="xs secondary">
-                {r.grade !== "A" && "An A starts at 90. "}
-                {drag ?? "Nothing is holding this grade back."}
-              </span>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: 16, lineHeight: "24px", fontWeight: 500 }}>Not enough data</span>
-              <span className="xs secondary">
-                Grades start after {MIN_GRADE_ALERTS} alerts that pass your limits. {formatNumber(eligibleAlerts(r))} so far.
-              </span>
-            </>
-          )}
+      {graded ? (
+        <div className="grade">
+          <GradeBadge grade={r.grade} />
+          <div className="col g1" style={{ minWidth: 0 }}>
+            <div className="row g2">
+              <span style={{ fontSize: 20, lineHeight: "28px", fontWeight: 500, letterSpacing: "-0.01em" }}>{formatNumber(r.score ?? 0, 1)}</span>
+              <span className="muted">/ 100</span>
+            </div>
+            {r.gradeSummary && <span className="xs secondary">{r.gradeSummary}</span>}
+          </div>
         </div>
-      </div>
-      <GradeScale grade={ready ? r.grade : null} />
-      {ready && (
+      ) : (
+        <div className="grade" data-state="ungraded">
+          <GradeBadge grade={null} />
+          <div className="col g1" style={{ minWidth: 0 }}>
+            <span style={{ fontSize: 16, lineHeight: "24px", fontWeight: 500 }}>Not enough alerts yet</span>
+            <span className="xs secondary">{r.gradeReason ?? `Grades start after ${need} alerts that pass your limits. ${have} so far.`}</span>
+          </div>
+        </div>
+      )}
+      {!graded && (
+        <div className="col g2">
+          <Meter value={Math.min(have, need)} max={need} tone="accent" aria-label={`${have} of ${need} alerts needed for a grade`} />
+          <span className="xs muted">
+            <span className="mono secondary">{formatNumber(have)}</span> of <span className="mono secondary">{formatNumber(need)}</span> alerts that passed your limits
+            {r.counts.dryRun > 0 && (
+              <>
+                {" "}
+                · <span className="mono secondary">{formatNumber(r.counts.dryRun)}</span> dry run {r.counts.dryRun === 1 ? "alert" : "alerts"} not counted
+              </>
+            )}
+          </span>
+        </div>
+      )}
+      <GradeScale grade={r.grade} />
+      {graded && r.gradeParts.length > 0 && (
         <table className="t compact" style={{ margin: "0 -16px", width: "calc(100% + 32px)" }} aria-label="How each part scored">
           <thead>
             <tr>
@@ -88,22 +98,20 @@ function GradeBody({ r }: { r: ReportCard }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((x) => (
-              <tr key={x.name}>
-                <td>{x.name}</td>
-                <td className="num muted">{x.weight}%</td>
-                <td className="num">{x.measured}</td>
-                <td className="num">{x.score === null ? "n/a" : formatNumber((x.score / x.weight) * 100, 1)}</td>
+            {r.gradeParts.map((p) => (
+              <tr key={p.key}>
+                <td>{p.label}</td>
+                <td className="num muted">{Math.round(p.weight * 100)}%</td>
+                <td className="num">{p.measured === null ? "n/a" : p.measuredLabel}</td>
+                <td className="num">{formatNumber(p.score, 1)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      <details className="how" open>
+      <details className="how" open={graded} key={graded ? "graded" : "ungraded"}>
         <summary>
-          <svg className="i-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="m9 18 6-6-6-6" />
-          </svg>
+          <Chevron />
           How the grade is computed
         </summary>
         <p>{r.gradeExplanation}</p>

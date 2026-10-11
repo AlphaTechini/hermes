@@ -1,15 +1,15 @@
-import { ChartColumn, CircleX } from "lucide-react";
+import { ArrowDown, ArrowUp, ChartColumn, CircleX, Minus } from "lucide-react";
 import { useMemo } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PageHeader } from "../../components/shell/PageHeader";
-import { formatBps, formatFraction, formatMs, formatNumber, formatSignedUsd, formatUsd, orNA, pnlTone } from "../../lib/format";
+import { formatBps, formatFraction, formatMs, formatNumber, formatSignedUsd, pnlTone } from "../../lib/format";
 import { PAGE } from "../../lib/routes";
-import { useLimits, useStrategies } from "../../lib/queries";
-import { ButtonLink, Button, Card, EmptyState, KpiRow, KpiTile, SegmentedControl, Select, useDelayedFlag } from "../../components/ui";
+import { useStrategies } from "../../lib/queries";
+import { ButtonLink, Button, Card, EmptyState, KpiDelta, KpiRow, KpiTile, SegmentedControl, Select, useDelayedFlag } from "../../components/ui";
 import { LatencyCard, SlippageCard } from "./Charts";
 import { GradePanel } from "./GradePanel";
 import { MissedCard } from "./MissedCard";
-import { isUiRange, useReportCard, type UiRange } from "./report-data";
+import { isUiRange, latencyDeltaText, useReportCard, type UiRange } from "./report-data";
 
 const RANGE_OPTIONS: { value: UiRange; label: string }[] = [
   { value: "24h", label: "24h" },
@@ -26,10 +26,9 @@ export function ReportPage() {
   const rangeParam = search.get("range");
   const range: UiRange = isUiRange(rangeParam) ? rangeParam : "7d";
   const strategies = useStrategies();
-  const limits = useLimits();
   const list = strategies.data;
   const current = list?.find((s) => s.id === strategyId);
-  const report = useReportCard(current?.id, range, current?.name);
+  const report = useReportCard(current?.id, range);
   const slow = useDelayedFlag(report.isLoading || strategies.isLoading);
   const r = report.data;
 
@@ -98,7 +97,6 @@ export function ReportPage() {
 
   const loading = !r && (report.isLoading || strategies.isLoading);
   const showSkeleton = loading && slow;
-  const cap = limits.data?.defaultSlippageBps;
   const stoppedBlocked = r?.counts.blocked ?? 0;
   const stoppedMissed = r ? r.counts.expired + r.counts.failed : 0;
   const stopped = stoppedBlocked + stoppedMissed;
@@ -108,9 +106,14 @@ export function ReportPage() {
     const m = /^(.*?) (ms|s|bps)$/.exec(v);
     return m ? [m[1]!, m[2]] : [v, undefined];
   };
-  const [medVal, medUnit] = r?.latency.medianMs != null ? split(formatMs(r.latency.medianMs)) : ["n/a", undefined];
-  const [p95Val, p95Unit] = r?.latency.p95Ms != null ? split(formatMs(r.latency.p95Ms)) : ["n/a", undefined];
-  const [slipVal, slipUnit] = r?.slippage.medianBps != null ? split(formatBps(r.slippage.medianBps)) : ["n/a", undefined];
+  // While the report loads the values stay empty instead of flashing n/a.
+  const blank = r ? "n/a" : "";
+  const [medVal, medUnit] = r?.latency.medianMs != null ? split(formatMs(r.latency.medianMs)) : [blank, undefined];
+  const [p95Val, p95Unit] = r?.latency.p95Ms != null ? split(formatMs(r.latency.p95Ms)) : [blank, undefined];
+  const [slipVal, slipUnit] = r?.slippage.medianBps != null ? split(formatBps(r.slippage.medianBps)) : [blank, undefined];
+  const delta = r ? latencyDeltaText(r, range) : null;
+  const priorLabel = range === "all" ? null : `prior ${range}`;
+  const cost = r ? -r.slippage.costUsd : 0;
 
   return (
     <>
@@ -122,11 +125,28 @@ export function ReportPage() {
             <KpiTile
               label="Fill rate"
               loading={showSkeleton}
-              value={r?.fillRate != null ? formatFraction(r.fillRate).replace("%", "") : "n/a"}
+              value={r?.fillRate != null ? formatFraction(r.fillRate).replace("%", "") : blank}
               unit={r?.fillRate != null ? "%" : undefined}
-              sub={r ? `${formatNumber(r.counts.filled + r.counts.partiallyFilled)} of ${formatNumber(r.counts.shouldHaveTraded)} eligible alerts` : undefined}
+              sub={r ? `${formatNumber(r.counts.filled + r.counts.partiallyFilled)} of ${formatNumber(r.counts.eligible)} eligible alerts` : undefined}
             />
-            <KpiTile label="Median alert to fill" loading={showSkeleton} value={medVal} unit={medUnit} sub={r ? `Across ${formatNumber(r.latency.count)} ${r.latency.count === 1 ? "fill" : "fills"}` : undefined} />
+            <KpiTile
+              label="Median alert to fill"
+              loading={showSkeleton}
+              value={medVal}
+              unit={medUnit}
+              sub={
+                !r ? undefined : delta ? (
+                  <KpiDelta tone={delta.tone} icon={delta.tone === "positive" ? <ArrowDown className="i-12" aria-hidden /> : delta.tone === "negative" ? <ArrowUp className="i-12" aria-hidden /> : <Minus className="i-12" aria-hidden />}>
+                    {delta.text}
+                  </KpiDelta>
+                ) : (
+                  <>
+                    Across {formatNumber(r.latency.count)} {r.latency.count === 1 ? "fill" : "fills"}
+                    {priorLabel && r.prior && r.latency.count > 0 && <> · no {priorLabel} to compare</>}
+                  </>
+                )
+              }
+            />
             <KpiTile
               label="p95 alert to fill"
               loading={showSkeleton}
@@ -143,7 +163,7 @@ export function ReportPage() {
                 r ? (
                   <>
                     p95 <span className="d secondary">{formatBps(r.slippage.p95Bps)}</span>
-                    {cap !== undefined && <> · cap {formatNumber(cap)} bps</>}
+                    <> · cap {formatNumber(r.slippageCapBps)} bps</>
                   </>
                 ) : undefined
               }
@@ -151,12 +171,18 @@ export function ReportPage() {
             <KpiTile
               label="Realized PnL"
               loading={showSkeleton}
-              value={r ? formatSignedUsd(r.pnl.realizedUsd) : "n/a"}
+              value={r ? formatSignedUsd(r.pnl.realizedUsd) : ""}
               tone={pnlCls === "neutral" ? undefined : pnlCls}
               sub={
                 r ? (
                   <>
-                    Fees <span className="d secondary">{orNA(-r.pnl.feesUsd, (v) => (v === 0 ? "$0.00" : formatUsd(v)))}</span> · net <span className="d secondary">{formatSignedUsd(r.pnl.netUsd)}</span>
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      Slippage cost <span className="d secondary">{r.slippage.count === 0 ? "n/a" : cost === 0 ? "$0.00" : formatSignedUsd(cost)}</span>
+                    </span>{" "}
+                    ·{" "}
+                    <span style={{ whiteSpace: "nowrap" }}>
+                      fees <span className="d secondary">{r.pnl.feesUsd === 0 ? "$0.00" : formatSignedUsd(-r.pnl.feesUsd)}</span>
+                    </span>
                   </>
                 ) : undefined
               }
@@ -164,7 +190,7 @@ export function ReportPage() {
             <KpiTile
               label="Stopped"
               loading={showSkeleton}
-              value={r ? formatNumber(stopped) : "n/a"}
+              value={r ? formatNumber(stopped) : ""}
               sub={
                 r ? (
                   <>
@@ -174,7 +200,7 @@ export function ReportPage() {
               }
             />
           </KpiRow>
-          <LatencyCard report={r} range={range} loading={loading} />
+          <LatencyCard report={r} loading={loading} />
         </div>
       </div>
       <div className="grid-12">

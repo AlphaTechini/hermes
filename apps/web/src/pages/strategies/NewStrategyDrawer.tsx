@@ -2,18 +2,20 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { MARKET_SYMBOLS, type StrategySecretDTO } from "@hermes/shared";
 import { errorMessage } from "../../lib/api";
-import { useCreateStrategy } from "../../lib/queries";
-import { Button, Drawer, Input, NumberInput, Select, useToast } from "../../components/ui";
+import { useCreateStrategy, useLimits } from "../../lib/queries";
+import { Button, Checkbox, Drawer, Input, NumberInput, Select, useToast } from "../../components/ui";
 import { ConnectBody } from "./ConnectBody";
 
 /** New strategy drawer: Name, Market, Size, Leverage. After creating, the same Connect section appears with the real secret. */
 export function NewStrategyDrawer({ open, onClose, onOpenStrategy }: { open: boolean; onClose: () => void; onOpenStrategy: (id: string) => void }) {
   const toast = useToast();
   const create = useCreateStrategy();
+  const limits = useLimits();
   const [name, setName] = useState("");
   const [market, setMarket] = useState<string>("BTC");
   const [sizeUsd, setSizeUsd] = useState<number | null>(null);
   const [leverage, setLeverage] = useState<number | null>(5);
+  const [dryRun, setDryRun] = useState(false);
   const [touched, setTouched] = useState(false);
   const [created, setCreated] = useState<StrategySecretDTO | null>(null);
 
@@ -25,6 +27,7 @@ export function NewStrategyDrawer({ open, onClose, onOpenStrategy }: { open: boo
       setName("");
       setSizeUsd(null);
       setLeverage(5);
+      setDryRun(false);
       setTouched(false);
     }, 200);
   };
@@ -36,7 +39,7 @@ export function NewStrategyDrawer({ open, onClose, onOpenStrategy }: { open: boo
     setTouched(true);
     if (!name.trim() || levError) return;
     create.mutate(
-      { name: name.trim(), defaultMarket: market, defaultSizeUsd: sizeUsd, defaultLeverage: leverage },
+      { name: name.trim(), defaultMarket: market, defaultSizeUsd: sizeUsd, defaultLeverage: leverage, dryRun },
       {
         onSuccess: (s) => setCreated(s),
         onError: (e) => toast.negative("Could not create the strategy", errorMessage(e)),
@@ -95,8 +98,12 @@ export function NewStrategyDrawer({ open, onClose, onOpenStrategy }: { open: boo
         >
           <Input label="Name" placeholder="Breakout 15m" value={name} onChange={(e) => setName(e.target.value)} error={nameError} maxLength={80} autoFocus data-autofocus />
           <Select label="Market" value={market} onChange={setMarket} options={MARKET_SYMBOLS.map((m) => ({ value: m as string, label: m, market: m }))} hint="Used when the message has no market." />
-          <NumberInput label="Size" prefix="$" unit="per order" value={sizeUsd} onValueChange={setSizeUsd} min={0} placeholder="From the alert" hint="Leave empty to use the size in the TradingView message." />
-          <NumberInput label="Leverage if the alert has none" unit="x" value={leverage} onValueChange={setLeverage} min={0} error={levError} hint="Your risk limit caps this." />
+          <NumberInput label="Size" prefix="$" unit="per order" value={sizeUsd} onValueChange={setSizeUsd} min={0} placeholder="From the alert" boxClassName="[&_input::placeholder]:font-sans" hint="Leave empty to use the size in the TradingView message." />
+          <NumberInput label="Leverage if the alert has none" unit="x" value={leverage} onValueChange={setLeverage} min={0} error={levError} hint={limits.data ? `Your risk limit caps this at ${limits.data.maxLeverage}x.` : "Your risk limit caps this."} />
+          <div className="col g1">
+            <Checkbox checked={dryRun} onCheckedChange={setDryRun} label="Start in dry run" />
+            <span className="hint">Dry run: checks run, nothing is sent to Perpl. Turn it off on the strategy when you are ready.</span>
+          </div>
           <button type="submit" hidden />
         </form>
       )}

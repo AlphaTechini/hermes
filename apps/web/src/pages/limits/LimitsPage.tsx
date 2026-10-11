@@ -1,12 +1,12 @@
-import { CirclePause, CircleX, Play } from "lucide-react";
+import { CirclePause, CircleX, Play, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { MARKET_SYMBOLS, type AlertRecord, type RiskLimits } from "@hermes/shared";
 import { PageHeader } from "../../components/shell/PageHeader";
 import { errorMessage } from "../../lib/api";
-import { formatBps, formatLeverageX, formatNumber, formatPrice, formatUsd, orNA } from "../../lib/format";
+import { formatBps, formatDateTime, formatLeverageX, formatNumber, formatPrice, formatSignedUsd, formatUsd, orNA } from "../../lib/format";
 import { PAGE } from "../../lib/routes";
-import { useAccount, useAlerts, useApprovals, useLimits, useOrders, usePositions, useSetPaused, useUpdateLimits } from "../../lib/queries";
+import { useAccount, useAlerts, useApprovals, useLimits, useMarkets, useOrders, usePositions, useSetPaused, useUpdateLimits } from "../../lib/queries";
 import {
   Button,
   Card,
@@ -20,6 +20,7 @@ import {
   Meter,
   NumberInput,
   SaveBar,
+  Select,
   Skeleton,
   useDelayedFlag,
   useToast,
@@ -29,7 +30,7 @@ import { LeverageScale } from "./LeverageScale";
 import { LimitRow, UsageHead } from "./LimitRow";
 
 type Draft = Omit<RiskLimits, "paused">;
-const FIELDS = ["allowedMarkets", "maxPositionUsd", "maxLeverage", "dailyLossStopUsd", "approvalThresholdUsd", "maxAlertAgeSec", "maxOrdersPerMinute", "defaultSlippageBps"] as const;
+const FIELDS = ["allowedMarkets", "maxPositionUsd", "maxLeverage", "dailyLossStopUsd", "approvalThresholdUsd", "approvalExpirySec", "maxAlertAgeSec", "maxOrdersPerMinute", "defaultSlippageBps"] as const;
 type Field = (typeof FIELDS)[number];
 
 const LABEL: Record<Field, string> = {
@@ -38,10 +39,15 @@ const LABEL: Record<Field, string> = {
   maxLeverage: "Max leverage",
   dailyLossStopUsd: "Daily loss stop",
   approvalThresholdUsd: "Approval threshold",
+  approvalExpirySec: "Approval expiry",
   maxAlertAgeSec: "Max alert age",
   maxOrdersPerMinute: "Max orders per minute",
   defaultSlippageBps: "Default slippage",
 };
+
+/** `30 s`, `2 min`, `1 h`, `90 s`: whole units only, the way the select reads. */
+const formatExpiry = (sec: number): string => (sec % 3600 === 0 ? `${sec / 3600} h` : sec % 60 === 0 ? `${sec / 60} min` : `${formatNumber(sec)} s`);
+const EXPIRY_CHOICES = [30, 60, 120, 300, 600, 1800, 3600];
 
 const fmtField = (f: Field, l: Draft): string => {
   switch (f) {
@@ -53,6 +59,8 @@ const fmtField = (f: Field, l: Draft): string => {
       return formatUsd(l[f], { decimals: Number.isInteger(l[f]) ? 0 : 2 });
     case "maxLeverage":
       return formatLeverageX(l.maxLeverage);
+    case "approvalExpirySec":
+      return formatExpiry(l.approvalExpirySec);
     case "maxAlertAgeSec":
       return `${formatNumber(l.maxAlertAgeSec)} s`;
     case "maxOrdersPerMinute":
@@ -94,6 +102,7 @@ export function LimitsPage() {
   const setPaused = useSetPaused();
   const positions = usePositions();
   const account = useAccount();
+  const markets = useMarkets();
   const alerts = useAlerts({ limit: 200 });
   const approvals = useApprovals();
   const orders = useOrders(100);
@@ -125,9 +134,12 @@ export function LimitsPage() {
     return { checked: checked.length, blocked: blocked.length, byReason, reasonCount, blockedMarkets, slipMedian: median(slip) };
   }, [alerts.data, now]);
 
+  // The daily loss stop is evaluated by the server on total PnL today (realized + unrealized, UTC day).
+  const alertsFailed = alerts.isError && !alerts.data;
   const acc = account.data;
-  const pnlToday = acc ? acc.realizedPnlTodayUsd + acc.unrealizedPnlUsd : null;
-  const lossUsed = pnlToday === null ? null : Math.max(0, -pnlToday);
+  const pnlToday = acc ? (acc.todayPnlUsd ?? acc.realizedPnlTodayUsd + acc.unrealizedPnlUsd) : null;
+  const lossUsed = acc ? (acc.lossStopUsedUsd ?? Math.max(0, -(pnlToday ?? 0))) : null;
+  const marks = useMemo(() => new Map((markets.data ?? []).map((m) => [m.symbol, m.markPrice])), [markets.data]);
 
   const pos = positions.data ?? [];
   const posByMarket = new Map(pos.map((p) => [p.market, p]));
@@ -160,6 +172,7 @@ export function LimitsPage() {
     if (!(d.maxLeverage >= 1 && d.maxLeverage <= 20)) e.maxLeverage = "Leverage must be between 1x and 20x.";
     if (!(d.dailyLossStopUsd > 0)) e.dailyLossStopUsd = "Daily loss stop must be above $0.";
     if (!(d.approvalThresholdUsd > 0)) e.approvalThresholdUsd = "Approval threshold must be above $0.";
+    if (!(d.approvalExpirySec >= 10 && d.approvalExpirySec <= 86_400)) e.approvalExpirySec = "Approvals expire after 10 seconds to 24 hours.";
     if (!(d.maxAlertAgeSec > 0)) e.maxAlertAgeSec = "Max alert age must be above 0 seconds.";
     if (!(d.maxOrdersPerMinute >= 1) || !Number.isInteger(d.maxOrdersPerMinute)) e.maxOrdersPerMinute = "Use a whole number of orders, at least 1.";
     if (!(d.defaultSlippageBps >= 0) || !Number.isInteger(d.defaultSlippageBps)) e.defaultSlippageBps = "Use a whole number of bps, 0 or more.";
@@ -169,6 +182,8 @@ export function LimitsPage() {
 
   const changed: Field[] = savedDraft && d ? FIELDS.filter((f) => !sameField(f, savedDraft, d)) : [];
   const dirty = changed.length > 0;
+  // Meters and tiles keep measuring against the SAVED value while a field holds something invalid (0, empty).
+  const eff = <K extends Field>(k: K, valid: boolean): Draft[K] => (valid || !savedDraft ? d![k] : savedDraft[k]);
   const set = <K extends Field>(k: K, v: Draft[K]) => d && setDraft({ ...d, [k]: v });
   const was = (f: Field) => (savedDraft && changed.includes(f) ? <> Was <span className="mono">{fmtField(f, savedDraft)}</span>. Saved changes apply to the next alert.</> : null);
 
@@ -262,6 +277,7 @@ export function LimitsPage() {
 
   const posRows = [...pos].sort((a, b) => b.notionalUsd - a.notionalUsd);
   const largest = posRows[0];
+  const expiryOptions = [...new Set([...EXPIRY_CHOICES, d.approvalExpirySec, saved.approvalExpirySec])].sort((a, b) => a - b).map((v) => ({ value: String(v), label: formatExpiry(v) }));
   const levRows = posRows.map((p) => ({ market: p.market, lv: leverageByMarket.get(p.market) })).filter((r): r is { market: string; lv: number } => r.lv !== undefined);
   const maxLevOpen = levRows.reduce((m, r) => Math.max(m, r.lv), 0);
   const levGroups = new Map<number, string[]>();
@@ -272,17 +288,42 @@ export function LimitsPage() {
     .join(", ");
   const resetMs = msUntilUtcMidnight(now);
   const resetText = `${Math.floor(resetMs / 3_600_000)}h ${String(Math.floor((resetMs % 3_600_000) / 60_000)).padStart(2, "0")}m`;
-  const lossPct = lossUsed !== null && d.dailyLossStopUsd > 0 ? (lossUsed / d.dailyLossStopUsd) * 100 : null;
+  const posCap = eff("maxPositionUsd", !errors.maxPositionUsd);
+  const levCap = eff("maxLeverage", !errors.maxLeverage);
+  const lossCap = eff("dailyLossStopUsd", !errors.dailyLossStopUsd);
+  const rateCap = eff("maxOrdersPerMinute", !errors.maxOrdersPerMinute);
+  const slipCap = eff("defaultSlippageBps", !errors.defaultSlippageBps);
+  const lossPct = lossUsed !== null && lossCap > 0 ? (lossUsed / lossCap) * 100 : null;
+  const lastChanged = saved.updatedAt ? formatDateTime(saved.updatedAt).replace(/ (\d\d:\d\d)$/, ", $1") : null;
   const blockedBy = (r: string) => today.reasonCount(r);
-  const reasonText = [...today.byReason.entries()].sort((a, b) => b[1] - a[1]).map(([r, n]) => `${REASON_SHORT[r] ?? "Other"} ${n}`).join(" · ");
+  const reasons = [...today.byReason.entries()].sort((a, b) => b[1] - a[1]).map(([r, n]) => ({ label: REASON_SHORT[r] ?? "Other", n }));
+  // Each "label count" pair stays on one line, so a narrow tile never leaves an orphan number.
+  const reasonText =
+    reasons.length === 0 ? null : (
+      <>
+        {reasons.map((r, i) => (
+          <span key={r.label}>
+            {i > 0 && " · "}
+            <span style={{ whiteSpace: "nowrap" }}>
+              {r.label} {r.n}
+            </span>
+          </span>
+        ))}
+      </>
+    );
 
   return (
     <>
       {header}
 
       <KpiRow aria-label="Limits today">
-        <KpiTile label="Alerts checked today" value={formatNumber(today.checked)} sub={`${today.checked - today.blocked} passed · ${today.blocked} stopped`} loading={alerts.isLoading} />
-        <KpiTile label="Blocked by a limit" value={formatNumber(today.blocked)} sub={reasonText || "Nothing blocked today"} loading={alerts.isLoading} />
+        <KpiTile
+          label="Alerts checked today"
+          value={alertsFailed ? "n/a" : formatNumber(today.checked)}
+          sub={alertsFailed ? "Could not load alerts" : `${today.checked - today.blocked} passed · ${today.blocked} stopped`}
+          loading={alerts.isLoading}
+        />
+        <KpiTile label="Blocked by a limit" value={alertsFailed ? "n/a" : formatNumber(today.blocked)} sub={alertsFailed ? "Could not load alerts" : (reasonText ?? "Nothing blocked today")} loading={alerts.isLoading} />
         <KpiTile
           label="Daily loss used"
           value={lossPct === null ? "n/a" : formatNumber(lossPct, 1)}
@@ -290,10 +331,10 @@ export function LimitsPage() {
           tone={lossPct !== null && lossPct >= 100 ? "negative" : lossPct !== null && lossPct >= 80 ? "warning" : undefined}
           sub={
             lossUsed === null ? (
-              "Waiting for your account"
+              account.isError ? "Could not load your account" : "Waiting for your account"
             ) : (
               <>
-                <span className="d secondary">{formatUsd(lossUsed)}</span> of <span className="d secondary">{formatUsd(d.dailyLossStopUsd, { decimals: Number.isInteger(d.dailyLossStopUsd) ? 0 : 2 })}</span>
+                <span className="d secondary">{formatUsd(lossUsed)}</span> of <span className="d secondary">{formatUsd(lossCap, { decimals: Number.isInteger(lossCap) ? 0 : 2 })}</span>
               </>
             )
           }
@@ -312,7 +353,7 @@ export function LimitsPage() {
       </KpiRow>
 
       <Card>
-        <CardHeader title="Limits" meta="Saved changes apply to the next alert" />
+        <CardHeader title="Limits" meta={lastChanged ? `Last changed ${lastChanged}` : "No changes saved yet"} />
 
         <LimitRow
           wide
@@ -325,6 +366,8 @@ export function LimitsPage() {
                 {MARKET_SYMBOLS.map((m) => {
                   const on = d.allowedMarkets.includes(m);
                   const p = posByMarket.get(m);
+                  // The mark is a market value: it comes from market data, with a held position as a fallback.
+                  const mark = marks.get(m) ?? p?.markPrice ?? null;
                   const blocked = today.blockedMarkets.get(m) ?? 0;
                   return (
                     <MarketTile
@@ -332,10 +375,12 @@ export function LimitsPage() {
                       market={m}
                       checked={on}
                       onChange={(c) => set("allowedMarkets", c ? [...d.allowedMarkets, m] : d.allowedMarkets.filter((x) => x !== m))}
-                      price={p ? <span style={on ? undefined : { color: "var(--text-muted)" }}>{formatPrice(p.markPrice, m)}</span> : <span className="muted">n/a</span>}
+                      price={mark !== null ? <span style={on ? undefined : { color: "var(--text-muted)" }}>{formatPrice(mark, m)}</span> : markets.isLoading ? <span className="muted">&nbsp;</span> : <span className="muted">n/a</span>}
                       note={
                         blocked > 0 && !on ? (
                           <span className="warn">{plural(blocked, "alert")} blocked today</span>
+                        ) : mark === null && !markets.isLoading ? (
+                          "No mark price from Perpl"
                         ) : p ? (
                           <>Open {formatUsd(p.notionalUsd, { decimals: 0 })}</>
                         ) : (
@@ -373,7 +418,7 @@ export function LimitsPage() {
           }
           usage={
             <div className="usage">
-              <UsageHead label="Now, per market" value={largest && d.maxPositionUsd > 0 ? <>Largest {formatNumber((largest.notionalUsd / d.maxPositionUsd) * 100, 1)}%</> : undefined} />
+              <UsageHead label="Now, per market" value={largest && posCap > 0 ? <>Largest {formatNumber((largest.notionalUsd / posCap) * 100, 1)}%</> : undefined} />
               {posRows.length === 0 ? (
                 <span className="xs muted">No open positions.</span>
               ) : (
@@ -381,9 +426,9 @@ export function LimitsPage() {
                   {posRows.map((p) => (
                     <div className="bar-row" key={p.market}>
                       <MarketChip market={p.market} />
-                      <Meter value={p.notionalUsd} max={d.maxPositionUsd} aria-label={`${p.market} position against the limit`} />
+                      <Meter value={p.notionalUsd} max={posCap} aria-label={`${p.market} position against the limit`} />
                       <span className="v">
-                        {formatUsd(p.notionalUsd, { decimals: 0 })} / {formatUsd(d.maxPositionUsd, { decimals: 0 })}
+                        {formatUsd(p.notionalUsd, { decimals: 0 })} / {formatUsd(posCap, { decimals: 0 })}
                       </span>
                     </div>
                   ))}
@@ -410,14 +455,14 @@ export function LimitsPage() {
                 value={
                   levRows.length ? (
                     <>
-                      {formatLeverageX(maxLevOpen, { decimals: 1 })} <span className="muted">/ {formatLeverageX(d.maxLeverage)}</span>
+                      {formatLeverageX(maxLevOpen, { decimals: 1 })} <span className="muted">/ {formatLeverageX(levCap)}</span>
                     </>
                   ) : (
                     "n/a"
                   )
                 }
               />
-              <Meter value={maxLevOpen} max={d.maxLeverage} aria-label="Highest open leverage against the limit" />
+              <Meter value={maxLevOpen} max={levCap} aria-label="Highest open leverage against the limit" />
               <span className="xs muted">{levRows.length ? `${levText}.` : posRows.length ? "Leverage of open positions is not available yet." : "No open positions."}</span>
             </div>
           }
@@ -448,12 +493,23 @@ export function LimitsPage() {
                     "n/a"
                   ) : (
                     <>
-                      {formatUsd(lossUsed)} <span className="muted">/ {formatUsd(d.dailyLossStopUsd, { decimals: Number.isInteger(d.dailyLossStopUsd) ? 0 : 2 })}</span>
+                      {formatUsd(lossUsed)} <span className="muted">/ {formatUsd(lossCap, { decimals: Number.isInteger(lossCap) ? 0 : 2 })}</span>
                     </>
                   )
                 }
               />
-              <Meter value={lossUsed ?? 0} max={d.dailyLossStopUsd} size="lg" threshold={0.8} aria-label="Daily loss used" />
+              <Meter value={lossUsed ?? 0} max={lossCap} size="lg" threshold={0.8} aria-label="Daily loss used" />
+              {acc && pnlToday !== null && (
+                <span className="xs muted">
+                  PnL today <span className={`mono ${pnlToday < 0 ? "neg" : pnlToday > 0 ? "pos" : "secondary"}`}>{formatSignedUsd(pnlToday)}</span>
+                  {acc.todayRealizedUsd !== undefined && acc.todayUnrealizedUsd !== undefined && (
+                    <>
+                      {" "}
+                      · realized <span className="mono secondary">{formatSignedUsd(acc.todayRealizedUsd)}</span> · open <span className="mono secondary">{formatSignedUsd(acc.todayUnrealizedUsd)}</span>
+                    </>
+                  )}
+                </span>
+              )}
               <span className="xs muted">
                 Resets in <span className="mono secondary">{resetText}</span>. You get a warning at 80%.
               </span>
@@ -463,19 +519,29 @@ export function LimitsPage() {
 
         <LimitRow
           label="Approval threshold"
-          changed={changed.includes("approvalThresholdUsd")}
+          changed={changed.includes("approvalThresholdUsd") || changed.includes("approvalExpirySec")}
           description="Orders above this notional wait for you in Approvals. If you do nothing, they expire and are not sent."
           control={
-            <NumberInput
-              aria-label="Approval threshold in USD"
-              prefix="$"
-              unit="notional"
-              value={d.approvalThresholdUsd}
-              onValueChange={(v) => set("approvalThresholdUsd", v ?? 0)}
-              min={0}
-              error={errors.approvalThresholdUsd}
-              hint={was("approvalThresholdUsd") ?? undefined}
-            />
+            <div className="col g3">
+              <NumberInput
+                aria-label="Approval threshold in USD"
+                prefix="$"
+                unit="notional"
+                value={d.approvalThresholdUsd}
+                onValueChange={(v) => set("approvalThresholdUsd", v ?? 0)}
+                min={0}
+                error={errors.approvalThresholdUsd}
+                hint={was("approvalThresholdUsd") ?? undefined}
+              />
+              <Select
+                label="Expire after"
+                value={String(d.approvalExpirySec)}
+                onChange={(v) => set("approvalExpirySec", Number(v))}
+                options={expiryOptions}
+                error={errors.approvalExpirySec}
+                hint={was("approvalExpirySec") ?? "An order nobody approves in time is not sent."}
+              />
+            </div>
           }
           usage={
             <div className="usage">
@@ -527,11 +593,11 @@ export function LimitsPage() {
                 label="Last minute"
                 value={
                   <>
-                    {ordersLastMinute} <span className="muted">/ {formatNumber(d.maxOrdersPerMinute)}</span>
+                    {ordersLastMinute} <span className="muted">/ {formatNumber(rateCap)}</span>
                   </>
                 }
               />
-              <Meter value={ordersLastMinute} max={d.maxOrdersPerMinute} aria-label="Orders in the last minute" />
+              <Meter value={ordersLastMinute} max={rateCap} aria-label="Orders in the last minute" />
               <span className="xs muted">{blockedBy("rate_limited") > 0 ? `${plural(blockedBy("rate_limited"), "alert")} blocked by this today.` : "Nothing blocked by this today."}</span>
             </div>
           }
@@ -540,7 +606,7 @@ export function LimitsPage() {
         <LimitRow
           label="Default slippage"
           changed={changed.includes("defaultSlippageBps")}
-          description="How far from the alert price a limit order may be set. Buys go up by this much and sells go down."
+          description="How far from the alert price an order may fill. Buys may go up by this much and sells down. A strategy can set its own."
           control={<NumberInput aria-label="Default slippage in bps" unit="bps" value={d.defaultSlippageBps} onValueChange={(v) => set("defaultSlippageBps", v ?? 0)} min={0} error={errors.defaultSlippageBps} hint={was("defaultSlippageBps") ?? undefined} />}
           usage={
             <div className="usage">
@@ -551,16 +617,28 @@ export function LimitsPage() {
                     "n/a"
                   ) : (
                     <>
-                      {formatBps(today.slipMedian)} <span className="muted">/ {formatNumber(d.defaultSlippageBps)} bps</span>
+                      {formatBps(today.slipMedian)} <span className="muted">/ {formatNumber(slipCap)} bps</span>
                     </>
                   )
                 }
               />
-              <Meter value={Math.max(0, today.slipMedian ?? 0)} max={d.defaultSlippageBps} aria-label="Median slippage against the limit" />
+              <Meter value={Math.max(0, today.slipMedian ?? 0)} max={slipCap} aria-label="Median slippage against the limit" />
               <span className="xs muted">{orNA(today.slipMedian, () => "Positive slippage means a worse fill than the alert price.")}</span>
             </div>
           }
         />
+      </Card>
+
+      <Card>
+        <div className="card-body row g3 wrap" style={{ alignItems: "center" }}>
+          <ShieldCheck className="i-16 pos" aria-hidden />
+          <span className="secondary" style={{ flex: "1 1 240px" }}>
+            Wallet policy is enforced by Privy on every transaction.
+          </span>
+          <Link className="link" to="/wallet">
+            See wallet policy
+          </Link>
+        </div>
       </Card>
 
       {dirty && (

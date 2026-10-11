@@ -1,10 +1,10 @@
-import { CircleX, TriangleAlert, Webhook } from "lucide-react";
+import { CircleX, FlaskConical, TriangleAlert, Webhook } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { StrategyDTO } from "@hermes/shared";
 import { errorMessage } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/format";
 import { useToggleStrategy } from "../../lib/queries";
-import { Button, Card, CardHeader, EmptyState, MarketChip, Skeleton, Tag, Toggle, useToast } from "../../components/ui";
+import { Button, Card, CardHeader, EmptyState, MarketChip, Skeleton, StatusPill, Tag, Toggle, useToast } from "../../components/ui";
 import { formatRate, type StrategyStats } from "./stats";
 
 interface Props {
@@ -40,15 +40,15 @@ export function StrategyList({ strategies, loading, showSkeleton, error, onRetry
       />
       {error ? (
         <EmptyState compact icon={CircleX} tone="negative" title="Could not load strategies" actions={<Button onClick={onRetry}>Retry</Button>}>
-          Hermes did not respond. Your strategies are safe on the server.
+          Hermes did not respond. Your webhooks still work.
         </EmptyState>
       ) : loading ? (
         showSkeleton ? (
           <div aria-busy="true" aria-label="Loading strategies">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="list-item" style={{ display: "flex", listStyle: "none", cursor: "default" }}>
+              <div key={i} className="li-row" style={{ cursor: "default" }}>
                 <Skeleton w={32} h={20} />
-                <span className="col grow g2">
+                <span className="col hm-grow g2">
                   <Skeleton w="60%" h={14} />
                   <Skeleton w="45%" h={12} />
                   <Skeleton w="70%" h={12} />
@@ -67,11 +67,18 @@ export function StrategyList({ strategies, loading, showSkeleton, error, onRetry
             const st = stats.get(s.id);
             const allowed = marketAllowed(s.defaultMarket);
             return (
-              <div key={s.id} className="list-item" aria-current={s.id === currentId ? "true" : undefined} style={{ display: "flex", listStyle: "none", position: "relative", padding: 0 }}>
+              <div key={s.id} className="li-row" aria-current={s.id === currentId ? "true" : undefined} style={{ position: "relative", padding: 0 }}>
                 <Link to={`/strategies/${s.id}`} className="row g3" style={{ alignItems: "flex-start", flex: "1 1 auto", minWidth: 0, padding: "12px 62px 12px 16px", color: "inherit" }}>
                   {s.defaultMarket ? <MarketChip market={s.defaultMarket} disabled={!s.enabled} /> : <span className="mkt" style={{ color: "var(--text-muted)" }}>any</span>}
-                  <span className="col grow g1">
-                    <span className={`w500 truncate${s.enabled ? "" : " secondary"}`}>{s.name}</span>
+                  <span className="col hm-grow g1">
+                    <span className="row g2" style={{ minWidth: 0 }}>
+                      <span className={`w500 truncate${s.enabled ? "" : " secondary"}`}>{s.name}</span>
+                      {s.dryRun && (
+                        <StatusPill tone="accent" icon={FlaskConical} title="Dry run: checks run, nothing is sent to Perpl">
+                          Dry run
+                        </StatusPill>
+                      )}
+                    </span>
                     <span className="xs muted row g2">
                       <span className="hm-dot" data-tone={s.enabled && s.lastAlertAt ? "positive" : undefined} />
                       {!s.enabled ? "Off" : s.lastAlertAt ? `Last alert ${formatRelativeTime(s.lastAlertAt, now)}` : "No alerts yet"}
@@ -83,7 +90,14 @@ export function StrategyList({ strategies, loading, showSkeleton, error, onRetry
                       </span>
                     ) : st ? (
                       <span className="xs secondary">
-                        <span className="mono">{st.today}</span> today · <span className="mono">{formatRate(st.filledRate)}</span> filled
+                        <span className="mono">{st.today}</span> today ·{" "}
+                        {s.dryRun ? (
+                          "checked only"
+                        ) : (
+                          <>
+                            <span className="mono">{formatRate(st.filledRate)}</span> filled
+                          </>
+                        )}
                         {st.blocked > 0 && (
                           <>
                             {" "}
