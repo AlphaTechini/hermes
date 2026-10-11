@@ -216,6 +216,8 @@ export interface AccountSummary {
   updatedAt: number;
   /** true when read live from Perpl just now, false when from the last stored snapshot. */
   live: boolean;
+  /** Collateral locked in open positions (margin used), USD. Present on live reads. */
+  marginUsedUsd?: number;
 }
 
 // --- approvals ---------------------------------------------------------------
@@ -242,6 +244,33 @@ export type LimitsResponse = RiskLimits;
 
 export type PerplLinkStatus = "not_configured" | "disconnected" | "reconnecting" | "connected";
 
+/**
+ * Health of the Perpl link of one user. Also pushed over SSE as `perpl_status` whenever the status, account or error
+ * changes and as a snapshot every few seconds while connected (so `headBlock` keeps moving).
+ */
+export interface PerplHealthDTO {
+  status: PerplLinkStatus;
+  connected: boolean;
+  mode: "sim" | "live";
+  accountId: string | null;
+  /** Epoch ms of the last trading-socket heartbeat (mt:100), null before the first one. */
+  lastHeartbeatAt: number | null;
+  /** `now - lastHeartbeatAt` at the moment this DTO was built, ms. */
+  heartbeatAgeMs: number | null;
+  /** Round-trip estimate to Perpl (timed REST call, smoothed), ms. */
+  latencyMs: number | null;
+  /** Newest chain block seen on the heartbeat. */
+  headBlock: number | null;
+  /** Reconnects since the registry created this client. */
+  reconnects: number;
+  /** Last connection error, readable. Cleared when connected. */
+  lastError: string | null;
+  /** Machine code of `lastError` (perpl_geo_blocked, perpl_key_rejected, ...). */
+  lastErrorCode: string | null;
+  /** Epoch ms when this DTO was built. */
+  at: number;
+}
+
 export interface PerplConnectionDTO {
   configured: boolean;
   status: PerplLinkStatus;
@@ -252,6 +281,8 @@ export interface PerplConnectionDTO {
   createdAt: number | null;
   lastRq: number | null;
   mode: "sim" | "live";
+  /** Live link health; null when nothing is configured. */
+  health?: PerplHealthDTO | null;
 }
 
 export const PutPerplConnectionRequest = z.object({
@@ -375,4 +406,8 @@ export type StreamEvent =
   | { type: "positions"; positions: Position[] }
   | { type: "approval"; approval: Approval }
   | { type: "perpl"; status: PerplLinkStatus }
+  /** Link health (connected, heartbeat age, latency, head block). Pushed on change and every ~5 s while connected. */
+  | { type: "perpl_status"; health: PerplHealthDTO }
+  /** Live account summary (equity, free collateral, margin used, uPnL). Pushed after account/position/fill events. */
+  | { type: "account"; account: AccountSummary }
   | { type: "wallet_action"; action: WalletActionDTO };

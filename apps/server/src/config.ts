@@ -16,6 +16,8 @@ const EnvSchema = z.object({
   PERPL_MODE: z.preprocess(emptyToUndef, z.enum(["sim", "live"]).default("sim")),
   PERPL_API_BASE: z.preprocess(emptyToUndef, z.string().url().default("https://testnet.perpl.xyz/api")),
   PERPL_WS_BASE: z.preprocess(emptyToUndef, z.string().default("wss://testnet.perpl.xyz")),
+  /** Port of the in-process Perpl simulator (PERPL_MODE=sim). 0 = pick a free port. */
+  PERPL_SIM_PORT: z.preprocess(emptyToUndef, z.coerce.number().int().min(0).max(65535).default(8790)),
   MONAD_RPC_URL: z.preprocess(emptyToUndef, z.string().url().default("https://testnet-rpc.monad.xyz")),
   PERPL_EXCHANGE_ADDRESS: z.preprocess(
     emptyToUndef,
@@ -69,6 +71,7 @@ export interface Config {
   perplMode: "sim" | "live";
   perplApiBase: string;
   perplWsBase: string;
+  perplSimPort: number;
   monadRpcUrl: string;
   perplExchangeAddress: string;
   privyAppId: string | undefined;
@@ -153,6 +156,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
     perplMode: e.PERPL_MODE,
     perplApiBase: e.PERPL_API_BASE,
     perplWsBase: e.PERPL_WS_BASE,
+    perplSimPort: e.PERPL_SIM_PORT,
     monadRpcUrl: e.MONAD_RPC_URL,
     perplExchangeAddress: e.PERPL_EXCHANGE_ADDRESS,
     privyAppId: e.PRIVY_APP_ID,
