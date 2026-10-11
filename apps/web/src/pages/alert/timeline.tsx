@@ -4,7 +4,7 @@ import { alertPipeline, STAGE_NAMES } from "../../lib/alert-view";
 import type { TimelineItem } from "../../components/ui";
 import { formatBlock, formatClock, formatCountdown, formatDeltaMs, formatMs, formatPrice, formatSize, formatUsd } from "../../lib/format";
 import { riskChecks, type ChecksResult } from "./derive";
-import type { AccountSummary, RiskLimits } from "@hermes/shared";
+import { placedInfo } from "./frame";
 
 const M = ({ children }: { children: ReactNode }) => <span className="mono">{children}</span>;
 const nf = new Intl.NumberFormat("en-US");
@@ -23,8 +23,8 @@ function niceStep(raw: number): number {
 
 const axisLabel = (ms: number) => (ms >= 1000 ? `${+(ms / 1000).toFixed(2)} s` : `${ms}`);
 
-export function buildTimeline(d: AlertDetail, limits: RiskLimits | undefined, account: AccountSummary | undefined, checksIn?: ChecksResult): BuiltTimeline {
-  const checks = checksIn ?? riskChecks(d, limits, account);
+export function buildTimeline(d: AlertDetail, checksIn?: ChecksResult): BuiltTimeline {
+  const checks = checksIn ?? riskChecks(d);
   const strategyPath = `/hooks/${d.strategyId}`;
   const fillById = new Map<string, Fill>(d.fills.map((f) => [f.id, f]));
   const approval = d.approval;
@@ -49,13 +49,18 @@ export function buildTimeline(d: AlertDetail, limits: RiskLimits | undefined, ac
         break;
       case "risk_checked": {
         const needs = det.needsApproval === true;
+        const isClose = d.kind === "close";
+        const counts = `${checks.passed} of ${checks.evaluated} checks passed.`;
+        const waited = approval?.decidedAt ? formatCountdown(Math.round((approval.decidedAt - approval.createdAt) / 1000)) : null;
         rows.push({
           at: e.atMs,
           title: "Risk checks passed",
           state: "done",
-          description: needs
-            ? `${checks.passed} of ${checks.total} checks passed. Above the approval threshold, so it waits for you.`
-            : `${checks.passed} of ${checks.total} checks passed. Under the approval threshold, sent without waiting.`,
+          description: isClose
+            ? `Closing order. ${counts} Limits on new exposure are skipped.`
+            : needs
+              ? `${counts} Above the approval threshold${waited ? `. Waited ${waited} for you.` : ", so it waits for you."}`
+              : `${counts} Under the approval threshold, sent without waiting.`,
         });
         break;
       }
@@ -82,13 +87,25 @@ export function buildTimeline(d: AlertDetail, limits: RiskLimits | undefined, ac
           ),
         });
         break;
-      case "accepted":
+      case "accepted": {
+        const placed = placedInfo(d);
+        const oid = placed?.oid ?? (typeof det.perplOrderId === "string" && Number.isFinite(Number(det.perplOrderId)) ? Number(det.perplOrderId) : null);
         rows.push({
           at: e.atMs,
           title: "Accepted",
           state: "done",
-          description: <>Perpl placed the order (<M>mt 24</M>){typeof det.perplOrderId === "string" && <> · order <M>{Number.isFinite(Number(det.perplOrderId)) ? nf.format(Number(det.perplOrderId)) : det.perplOrderId}</M></>}</>,
+          description: (
+            <>
+              {placed?.forwarded ? <>Forwarded (<M>mt 3</M>), then placed</> : <>Placed</>}
+              {placed?.block != null && <> in block <M>{formatBlock(placed.block)}</M></>} (<M>mt 24</M>
+              {oid !== null && <>, order <M>{nf.format(oid)}</M></>})
+            </>
+          ),
         });
+        break;
+      }
+      case "dry_run":
+        rows.push({ at: e.atMs, title: "Dry run, stopped here", state: "done", description: typeof det.message === "string" ? det.message : "This strategy is in dry run. Every check ran and nothing was sent to Perpl." });
         break;
       case "filled":
       case "partially_filled": {
@@ -166,6 +183,9 @@ export function buildTimeline(d: AlertDetail, limits: RiskLimits | undefined, ac
 
   // Stages that never happened.
   const pipe = alertPipeline(d);
+  if (d.status === "dry_run") {
+    rows.push({ at: null, title: "Sent, accepted, filled", state: "skipped", description: "Skipped. Dry run, nothing was sent to Perpl." });
+  }
   if (stop && pipe.stoppedAt >= 0 && pipe.stoppedAt < 5) {
     const names = STAGE_NAMES.slice(pipe.stoppedAt + 1);
     if (names.length) {

@@ -4,6 +4,7 @@ import {
   CircleCheck,
   CircleDot,
   Copy,
+  ShieldOff,
   ExternalLink,
   FileSearch,
   OctagonX,
@@ -51,6 +52,7 @@ import {
   formatLeverageX,
   formatMs,
   formatPrice,
+  priceDecimals,
   formatSize,
   formatTimeZone,
   formatUsd,
@@ -69,9 +71,11 @@ import {
   notionalOf,
   orderTypeText,
   parsedOf,
+  payloadView,
   rawTicker,
   redactedPayload,
   riskChecks,
+  sentMaxSlippage,
   slippageUsd,
   variantOf,
 } from "./derive";
@@ -143,15 +147,22 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
 
   const kind = variantOf(d);
   const out = alertOutcome(d);
-  const side = alertSide(d);
-  const checks = riskChecks(d, limits, account);
-  const tl = buildTimeline(d, limits, account, checks);
+  const checks = riskChecks(d);
+  const tl = buildTimeline(d, checks);
   const pipe = alertPipeline(d);
   const narrative = narrativeFor(d, limits, checks);
-  const frame = orderFrame(d, limits);
+  const frame = orderFrame(d);
   const messages = perplMessages(d);
   const p = parsedOf(d);
-  const size = baseSize(d);
+  // Alerts that stopped before Hermes parsed them have no market, side or size on the record. Read what the message
+  // itself says and label it as unverified, instead of showing "Alert n/a" over a payload that says "short BTC".
+  const unparsed = d.kind === null && d.side === null && d.market === null;
+  const fromMessage = unparsed ? payloadView(d) : null;
+  const side = fromMessage?.side ?? alertSide(d);
+  const market = d.market ?? fromMessage?.market ?? null;
+  const size = baseSize(d) ?? fromMessage?.size ?? null;
+  const isDryRun = kind === "dry_run";
+  const sentMs = sentMaxSlippage(frame);
   const order = d.orders[0];
   const filledNow = d.status === "filled" || d.status === "partially_filled";
   const fillTx = d.fills.find((f) => f.txHash)?.txHash ?? null;
@@ -172,11 +183,17 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
   const title = (
     <span className="row g3 wrap">
       <span className="row g2">
-        {d.kind === null && d.side === null ? <span>Alert</span> : <SideLabel side={side} />}
-        {d.market && <span>{d.market}</span>}
-        <span className="mono w500" style={{ fontSize: 18 }}>
-          {orNA(size, (v) => formatSize(v, d.market))}
-        </span>
+        {unparsed && !fromMessage?.side ? <span>Alert</span> : <SideLabel side={side} />}
+        {market && <span>{market}</span>}
+        {size !== null ? (
+          <span className="mono w500" style={{ fontSize: 18 }}>
+            {formatSize(size, market)}
+          </span>
+        ) : fromMessage?.sizeUsd != null ? (
+          <span className="mono w500" style={{ fontSize: 18 }}>
+            {formatUsd(fromMessage.sizeUsd, { decimals: 0 })}
+          </span>
+        ) : null}
       </span>
       <StatusPill kind={out.kind} />
     </span>
@@ -202,7 +219,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
           Review limit
         </Link>
       )}
-      {kind === "trade" && (
+      {(kind === "trade" || isDryRun) && (
         <Button size="sm" icon={RotateCcw} loading={replay.isPending} loadingLabel="Sending" onClick={doReplay}>
           Replay as test alert
         </Button>
@@ -217,10 +234,12 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
   );
 
   // --- KPI strip --------------------------------------------------------------------
-  const slipTone = slippageTone(d.slippageBps, maxSlippageOf(d, limits));
+  const slipTone = slippageTone(d.slippageBps, maxSlippageOf(d, limits, sentMs));
   const slipUsd = slippageUsd(d);
   const ticker = rawTicker(d);
-  const notional = notionalOf(d);
+  const notional = notionalOf(d) ?? fromMessage?.sizeUsd ?? null;
+  const alertPrice = d.alertPrice ?? fromMessage?.price ?? null;
+  const unverified = "From the message, not verified";
   const overBy = d.blockReason === "size_above_max" && notional !== null && limits ? Math.max(0, resultingOf(d, notional) - limits.maxPositionUsd) : null;
   const decisionMs = tl.totalMs;
   const kpiClass = drawer ? "alert-drawer-kpis" : undefined;
@@ -269,8 +288,13 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
       </KpiRow>
     ) : (
       <KpiRow aria-label="Alert summary" className={kpiClass}>
-        <KpiTile label="Alert price" mono value={formatPrice(d.alertPrice, d.market)} sub={ticker ? `From TradingView, ${ticker}` : "From TradingView"} />
-        <KpiTile label="Fill price" mono value={<span className="muted">Not sent</span>} sub="No order, no fee" />
+        <KpiTile
+          label="Alert price"
+          mono
+          value={alertPrice === null ? <span className="faint">n/a</span> : formatPrice(alertPrice, market)}
+          sub={fromMessage && alertPrice !== null ? unverified : ticker ? `From TradingView, ${ticker}` : "From TradingView"}
+        />
+        <KpiTile label="Fill price" mono value={<span className="muted">Not sent</span>} sub={isDryRun ? "Dry run, nothing sent" : "No order, no fee"} />
         <KpiTile
           label="Order notional"
           value={notional === null ? <span className="faint">n/a</span> : formatUsd(notional, { summary: true })}
@@ -280,6 +304,8 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
                 <ArrowUp aria-hidden />
                 <span className="d">{formatUsd(overBy, { decimals: 0 })}</span> over the limit
               </span>
+            ) : fromMessage && notional !== null ? (
+              unverified
             ) : (
               "Requested size"
             )
@@ -289,7 +315,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
           label="Time to decision"
           value={decisionMs === null ? <span className="faint">n/a</span> : decisionMs < 1 ? "<1" : decisionMs >= 1000 ? (decisionMs / 1000).toFixed(2) : Math.round(decisionMs)}
           unit={decisionMs === null ? undefined : decisionMs >= 1000 ? "s" : "ms"}
-          sub={kind === "blocked" ? "Received to blocked" : "Received to decision"}
+          sub={kind === "blocked" ? "Received to blocked" : isDryRun ? "Received to dry run" : "Received to decision"}
         />
       </KpiRow>
     );
@@ -300,7 +326,9 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
       <CardHeader
         title="Lifecycle"
         meta={
-          pipe.stoppedAt >= 0 && d.status !== "filled"
+          isDryRun
+            ? `3 of 6 stages · dry run${tl.totalMs !== null ? ` · ${formatMs(tl.totalMs)}` : ""}`
+            : pipe.stoppedAt >= 0 && d.status !== "filled"
             ? `Stopped at stage ${pipe.stoppedAt + 1} of 6`
             : d.status === "filled" || d.status === "partially_filled"
               ? `6 of 6 stages${tl.totalMs !== null ? ` · ${formatMs(tl.totalMs)}` : ""}`
@@ -315,21 +343,33 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
     </Card>
   );
 
+  const m = checks.meta;
   const risk = (
     <Card>
       <CardHeader
         title="Risk checks"
         meta={
-          checks.failed > 0 ? (
-            <>
-              <span className="warn">{checks.failed} failed</span> · {checks.passed} passed
-            </>
+          m === "Not checked" ? (
+            "Not checked"
           ) : (
-            `${checks.passed} passed`
+            <>
+              {m.failed > 0 && (
+                <>
+                  <span className="warn">{m.failed} failed</span> ·{" "}
+                </>
+              )}
+              {m.passed} passed{m.skipped > 0 ? ` · ${m.skipped} not run` : ""}
+            </>
           )
         }
       />
-      <ChecksList items={checks.items} icons={{ pass: CircleCheck, fail: OctagonX, skip: CircleDot }} />
+      {checks.notChecked ? (
+        <EmptyState icon={ShieldOff} compact title="Not checked">
+          {checks.notCheckedWhy}
+        </EmptyState>
+      ) : (
+        <ChecksList items={checks.items} icons={{ pass: CircleCheck, fail: OctagonX, skip: CircleDot }} />
+      )}
     </Card>
   );
 
@@ -341,7 +381,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
           <div className="empty-icon">
             <Ban aria-hidden />
           </div>
-          <p>{kind === "blocked" || kind === "dropped" ? "No transaction. Blocked alerts never reach Perpl, so there is nothing onchain." : "No transaction yet. A fill shows its transaction here."}</p>
+          <p>{kind === "blocked" || kind === "dropped" ? "No transaction. Blocked alerts never reach Perpl, so there is nothing onchain." : isDryRun ? "No transaction. Dry runs never reach Perpl, so there is nothing onchain." : "No transaction yet. A fill shows its transaction here."}</p>
         </div>
       ) : (
         <CardBody style={{ paddingTop: 4, paddingBottom: 4 }}>
@@ -360,6 +400,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
     </Card>
   );
 
+  const sentLimit = frame && typeof frame.fields.p === "number" ? frame.fields.p : null;
   const orderCard = kind === "trade" && order ? (
     <Card>
       <CardHeader title="Order" />
@@ -369,19 +410,20 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
             ["Type", orderTypeText(order, d)],
             ["Size", <span className="mono" key="s">{orNA(order.size ?? size, (v) => formatSize(v, d.market))} {d.market}</span>],
             ["Notional", <span className="mono" key="n">{orNA(notional, (v) => formatUsd(v))}</span>],
-            ["Limit price", <span className="mono" key="l">{formatPrice(order.price, d.market)}</span>],
-            ["Max slippage", <span className="mono" key="m">{orNA(maxSlippageOf(d, limits), (v) => `${v} bps`)}</span>],
-            ["Leverage", <span className="mono" key="lv">{orNA(order.leverage, (v) => formatLeverageX(v, { decimals: 1 }))}</span>],
+            // The frame is the truth: `p: 0` means no limit price (a market order bounded by max slippage). Never show the fill price as a limit.
+            ["Limit price", sentLimit === null ? <span className="faint" key="l">n/a</span> : sentLimit === 0 ? <span key="l">None, bounded by max slippage</span> : <span className="mono" key="l">{formatPrice(sentLimit / 10 ** priceDecimals(d.market), d.market)}</span>],
+            ["Max slippage", <span className="mono" key="m">{orNA(maxSlippageOf(d, limits, sentMs), (v) => `${v} bps`)}</span>],
+            ["Leverage", <span className="mono" key="lv">{orNA(order.leverage, (v) => formatLeverageX(v))}</span>],
           ]}
         />
       </CardBody>
     </Card>
   ) : null;
 
-  const messagesCard = kind === "trade" && messages.length > 0 ? <MessagesCard messages={messages} /> : null;
+  const messagesCard = (kind === "trade" || kind === "dry_run") && messages.length > 0 ? <MessagesCard messages={messages} /> : null;
 
   const payload = <CodeBlock title="Raw payload" meta="from TradingView" code={redactedPayload(d.rawBody)} copyAriaLabel="Copy payload" />;
-  const frameBlock = frame ? <CodeBlock title="Order frame sent" meta="mt 22" code={frame.display} copyValue={frame.copy} copyAriaLabel="Copy order frame" /> : null;
+  const frameBlock = frame ? <CodeBlock title="Order frame sent" meta={`mt 22 · ${formatClock(frame.atMs)}`} code={frame.display} copyValue={frame.copy} copyAriaLabel="Copy order frame" /> : null;
 
   const callout = narrative ? (
     <Callout tone={narrative.tone} icon={narrative.tone === "warning" ? OctagonX : undefined}>

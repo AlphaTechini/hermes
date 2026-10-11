@@ -34,7 +34,6 @@ import {
   useToast,
 } from "../../components/ui";
 import { ConnectBody } from "./ConnectBody";
-import { OutcomePill } from "./OutcomePill";
 
 const VALUE_SM = { fontSize: 20, lineHeight: "28px" } as const;
 
@@ -491,7 +490,7 @@ function RecentAlerts({ strategyId }: { strategyId: string }) {
           columns={[
             { key: "t", header: "Time", mono: true, cell: (a) => <span className="secondary">{formatTableTime(a.receivedAt)}</span> },
             { key: "a", header: "Alert", cell: (a) => <span className="row g2"><SideLabel side={alertSide(a)} size="xs" />{a.market && <MarketChip market={a.market} />}</span> },
-            { key: "s", header: "Outcome", cell: (a) => <OutcomePill alert={a} /> },
+            { key: "s", header: "Outcome", cell: (a) => <StatusPill kind={alertOutcome(a).kind} /> },
             { key: "l", header: "Alert to fill", numeric: true, hideSm: true, cell: (a) => orNA(a.latencyMs, formatMs) },
             { key: "p", header: "Slippage", numeric: true, hideSm: true, cell: (a) => orNA(a.slippageBps, (v) => formatBps(v)) },
           ]}

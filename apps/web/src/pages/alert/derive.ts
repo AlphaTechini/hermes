@@ -1,13 +1,16 @@
 /**
- * Everything the alert detail view derives from an `AlertDetail` plus the current limits and account:
- * the timeline, the risk check list, the order frame, the Perpl status rows and the blocked narrative.
- * Pure functions, no React. The server stores events, orders and fills (not raw Perpl frames or per check results),
- * so checks are re-derived from the `risk_checked` / `blocked` event detail and the limits (DESIGN.md 10.4).
+ * Everything the alert detail view derives from an `AlertDetail`: the risk check list, the headline numbers, the
+ * best-effort fields of a message that never got parsed. Pure functions, no React.
+ *
+ * The server stores what happened: `riskChecks` (the result of every rule, `passed: null` for rules that did not run),
+ * `orders[].frames` (the raw Perpl frames) and the alert events. Nothing here invents evidence: a check that did not run
+ * is shown as not run, and an alert that never reached the risk gate has "Not checked", never a green tick.
  */
-import type { AccountSummary, AlertDetail, AlertEventDTO, BlockReason, NormalizedAlert, Order, RiskLimits } from "@hermes/shared";
+import { MARKETS, ALERT_ACTIONS, normalizeMarket, resolveIntent, type AlertAction, type AlertDetail, type AlertEventDTO, type NormalizedAlert, type Order, type RiskCheckResult, type RiskLimits } from "@hermes/shared";
 import { Hand } from "lucide-react";
 import type { CheckItem } from "../../components/ui";
-import { formatLeverageX, formatUsd } from "../../lib/format";
+import type { SideKind } from "../../lib/alert-view";
+import { formatBps, formatLeverageX, formatPrice, formatUsd } from "../../lib/format";
 
 export const PERPL_EXCHANGE = "0x1964c32f0be608e7d29302aff5e61268e72080cc";
 
@@ -20,10 +23,11 @@ export const isFilled = (d: Pick<AlertDetail, "status">) => d.status === "filled
 /** Reached the order stage: an order exists and was written to the socket. */
 export const wasSent = (d: AlertDetail) => d.events.some((e) => e.status === "sent");
 
-/** Risk gate decided before any approval or order: blocked by a limit, or never past Verified. */
-export type Variant = "trade" | "blocked" | "dropped";
+/** `trade`: an order was (or will be) sent. `blocked`: a limit stopped it. `dropped`: never past Verified. `dry_run`: every check ran, nothing sent. */
+export type Variant = "trade" | "blocked" | "dropped" | "dry_run";
 export function variantOf(d: AlertDetail): Variant {
   if (d.status === "blocked") return "blocked";
+  if (d.status === "dry_run") return "dry_run";
   if (d.status === "duplicate" || d.status === "rejected_auth" || d.status === "invalid") return "dropped";
   return "trade";
 }
@@ -82,8 +86,12 @@ export function redactedPayload(raw: string): string {
   }
 }
 
-export function maxSlippageOf(d: AlertDetail, limits: RiskLimits | undefined): number | null {
-  return parsedOf(d).maxSlippageBps ?? limits?.defaultSlippageBps ?? null;
+/**
+ * The slippage cap the order was sent with. The sent frame's `ms` is the truth; before an order exists it is the alert's own
+ * `max_slippage_bps`, else the account default.
+ */
+export function maxSlippageOf(d: AlertDetail, limits: RiskLimits | undefined, sentMs?: number | null): number | null {
+  return sentMs ?? parsedOf(d).maxSlippageBps ?? limits?.defaultSlippageBps ?? null;
 }
 
 export function orderTypeText(o: Order | undefined, d: AlertDetail): string {
@@ -94,138 +102,197 @@ export function orderTypeText(o: Order | undefined, d: AlertDetail): string {
   return `${dir}, ${how}`;
 }
 
+// --- fields of a message that was never parsed ------------------------------------------------------
+
+export interface PayloadView {
+  side: SideKind | null;
+  market: string | null;
+  /** Requested notional, USD, or `size x price` when only base units were sent. */
+  sizeUsd: number | null;
+  /** Base units when the message sent `size`. */
+  size: number | null;
+  price: number | null;
+  leverage: number | null;
+}
+
+const asNum = (v: unknown): number | null => {
+  const n = typeof v === "string" ? Number(v.trim().replace(/,/g, "")) : v;
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/**
+ * Best-effort reading of the raw message, for alerts that stopped before Hermes parsed them (invalid, duplicate, bad
+ * secret). Shown labelled "From the message, not verified". Fields the message does not carry stay null.
+ */
+export function payloadView(d: Pick<AlertDetail, "rawBody">): PayloadView {
+  const empty: PayloadView = { side: null, market: null, sizeUsd: null, size: null, price: null, leverage: null };
+  let j: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(d.rawBody) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return empty;
+    j = parsed as Record<string, unknown>;
+  } catch {
+    return empty;
+  }
+  const rawAction = typeof j.action === "string" ? j.action.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+  const action = (ALERT_ACTIONS as readonly string[]).includes(rawAction) ? (rawAction as AlertAction) : null;
+  const mp = typeof j.market_position === "string" ? j.market_position.trim().toLowerCase() : undefined;
+  let side: SideKind | null = null;
+  if (action) {
+    const intent = resolveIntent({ action, ...(mp === "long" || mp === "short" || mp === "flat" ? { market_position: mp } : {}) });
+    side = intent.kind === "close" ? (intent.side === "long" ? "close-long" : intent.side === "short" ? "close-short" : "close") : intent.side === "short" ? "short" : "long";
+  }
+  const tickerRaw = typeof j.market === "string" ? j.market : typeof j.ticker === "string" ? j.ticker : "";
+  const market = tickerRaw ? normalizeMarket(tickerRaw) || null : null;
+  const price = asNum(j.price);
+  const size = asNum(j.size);
+  const sizeUsd = asNum(j.size_usd) ?? (size !== null && price !== null ? size * price : null);
+  return { side, market, sizeUsd, size, price, leverage: asNum(j.leverage) };
+}
+
 // --- risk checks -----------------------------------------------------------------------
 
 export interface ChecksResult {
   items: CheckItem[];
+  /** Rules that ran and passed. */
   passed: number;
+  /** Rules that ran and failed (plus a rejected or expired approval). */
   failed: number;
+  /** Rules that did not run: closes ignore the limits on new exposure, and the engine stops at the first failure. */
+  skipped: number;
+  /** Rules that ran: passed + failed. */
+  evaluated: number;
+  /** Every row in `items`. */
+  total: number;
   /** Name of the failing check, for the timeline text. */
   failedName: string | null;
-  total: number;
+  /**
+   * True when no check ran at all: the alert never reached the risk gate (invalid, duplicate, bad secret) or is still
+   * before it. Then `items` is empty and the card says so, instead of listing checks as passed.
+   */
+  notChecked: boolean;
+  /** Why nothing ran, for the empty state. */
+  notCheckedWhy: string | null;
+  /** The card meta: `11 passed`, `1 failed · 8 passed`, `Not checked`. */
+  meta: { failed: number; passed: number; skipped: number } | "Not checked";
 }
 
 const usd0 = (v: number | null) => formatUsd(v, { decimals: 0 });
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+/** Server texts use an ASCII hyphen for negatives; the UI uses U+2212. */
+const clean = (t: string) => t.replace(/-\$/g, "\u2212$");
 
-/** Parses `Resulting SOL position 29458.00 USD exceeds the maximum 25000 USD.` */
-function resultingPosition(detailText: string | null): number | null {
-  const m = detailText ? /position ([\d.]+) USD/.exec(detailText) : null;
-  return m ? Number(m[1]) : null;
+/** `25x`, `2.5x`: whole numbers without a decimal, in the callout and in the check row alike. */
+const lev = (v: unknown): string => (isNum(v) ? formatLeverageX(v) : "n/a");
+
+function describeCheck(c: RiskCheckResult, d: AlertDetail): { detail: string; value: string } {
+  const v = c.value;
+  const l = c.limit;
+  const state = c.skipped || c.passed === null ? "skip" : c.passed ? "pass" : "fail";
+  if (state === "skip") return { detail: c.detail ? clean(c.detail) : "Not run", value: "n/a" };
+  const money = (x: unknown) => (isNum(x) ? usd0(x) : "n/a");
+  switch (c.key) {
+    case "strategy_enabled":
+      return { detail: state === "fail" ? "The strategy is off" : (d.strategyName ?? "Strategy"), value: String(v ?? "n/a") };
+    case "alert_age":
+      return {
+        detail: state === "fail" ? `The alert was ${isNum(v) ? v : "n/a"} s old when Hermes checked it` : "Time since the alert was sent",
+        value: `${isNum(v) ? `${v} s` : "n/a"} / ${isNum(l) ? `${l} s` : "n/a"}`,
+      };
+    case "rate_limit":
+      return { detail: state === "fail" ? "Too many orders in the last minute" : "Orders in the last minute", value: `${isNum(v) ? v : "n/a"} / ${isNum(l) ? l : "n/a"}` };
+    case "perpl_connected":
+      return { detail: state === "fail" ? "Perpl was not connected" : "Trading socket", value: String(v ?? "n/a") };
+    case "position_to_close":
+      return { detail: state === "fail" ? (c.detail ? clean(c.detail) : "No open position to close") : "Open position found", value: typeof v === "string" ? v : "n/a" };
+    case "pause":
+      return { detail: state === "fail" ? "Trading is paused" : "Trading switch", value: String(v ?? "n/a") };
+    case "markets": {
+      const m = typeof v === "string" ? v : "n/a";
+      return { detail: m === "n/a" ? "Market not known" : state === "fail" ? `${m} is not in your allowed markets` : `${m} is on your list`, value: m };
+    }
+    case "daily_loss":
+      return { detail: state === "fail" ? "Loss today reached your stop" : "Loss so far today", value: `${money(v)} / ${isNum(l) ? usd0(l) : "off"}` };
+    case "size_known":
+      return { detail: state === "fail" ? "Hermes could not work out the order size" : "Order notional", value: money(v) };
+    case "leverage":
+      return {
+        detail: state === "fail" ? "The alert asked for more than your limit" : v === null ? "Not set by the alert" : "Requested by the alert",
+        value: `${v === null ? "n/a" : lev(v)} / ${lev(l)}`,
+      };
+    case "size":
+      // The limit applies to the position after the order, not to the order itself.
+      return { detail: "Position after this order", value: `${money(v)} / ${money(l)}` };
+    case "approval": {
+      const over = c.detail?.startsWith("Above") ?? (isNum(v) && isNum(l) && l > 0 && v >= l);
+      return { detail: over ? "Above the threshold, waits for you" : "Order notional", value: `${money(v)} / ${isNum(l) && l > 0 ? usd0(l) : "off"}` };
+    }
+    default:
+      return { detail: c.detail ? clean(c.detail) : "", value: v === null || v === undefined ? "n/a" : String(v) };
+  }
 }
 
-const ORDER: BlockReason[] = ["strategy_disabled", "stale_alert", "rate_limited", "perpl_not_connected", "trading_paused", "market_not_allowed", "daily_loss_stop_hit", "invalid_size", "leverage_above_max", "size_above_max"];
-
-export function riskChecks(d: AlertDetail, limits: RiskLimits | undefined, account: AccountSummary | undefined): ChecksResult {
-  const reason = d.blockReason;
-  const p = parsedOf(d);
-  const market = d.market ?? "n/a";
-  const isClose = d.kind === "close";
-  const rc = first(d, "risk_checked");
-  const needsApproval = rc?.detail?.needsApproval === true;
-  const notional = notionalOf(d);
-  const blockDetail = str(d.events.find((e) => e.status === "blocked")?.detail?.detail);
-  const reachedRisk = d.events.some((e) => e.status === "risk_checked");
-  const failIdx = reason && ORDER.includes(reason) ? ORDER.indexOf(reason) : -1;
-  // A check after the failing one was never evaluated (the engine stops at the first failure).
-  const notReached = (own: BlockReason): boolean => failIdx >= 0 && ORDER.indexOf(own) > failIdx;
-
-  const items: CheckItem[] = [];
-  const mk = (it: CheckItem) => items.push(it);
-
-  const stateFor = (own: BlockReason): "pass" | "fail" | "skip" => (reason === own ? "fail" : notReached(own) ? "skip" : "pass");
-  const skipText = "Not reached, an earlier check failed";
-  const closeSkip = "Not applied to closing orders";
-
-  // Failures that are not one of the six standard rows go first.
-  if (reason === "stale_alert") mk({ name: "Alert age", detail: blockDetail ?? "The alert arrived too late", value: "Too old", state: "fail" });
-  if (reason === "rate_limited") mk({ name: "Orders per minute", detail: blockDetail ?? "Too many orders", value: `${limits?.maxOrdersPerMinute ?? "n/a"} / min`, state: "fail" });
-  if (reason === "perpl_not_connected") mk({ name: "Perpl connection", detail: "Perpl was not connected", value: "Offline", state: "fail" });
-  if (reason === "trading_paused") mk({ name: "Trading", detail: "Trading is paused", value: "Paused", state: "fail" });
-  if (reason === "no_position_to_close") mk({ name: "Open position to close", detail: blockDetail ?? `No open ${market} position`, value: "None", state: "fail" });
-  if (reason === "invalid_size") mk({ name: "Order size", detail: "Size could not be worked out", value: "n/a", state: "fail" });
-
-  // 1. Strategy enabled
-  const sName = d.strategyName ?? "Strategy";
-  mk({ name: "Strategy enabled", detail: sName, value: reason === "strategy_disabled" ? "Off" : "On", state: stateFor("strategy_disabled") === "skip" ? "pass" : stateFor("strategy_disabled") });
-
-  // 2. Market allowed
-  if (isClose) mk({ name: "Market allowed", detail: closeSkip, value: "n/a", state: "skip" });
-  else {
-    const st = stateFor("market_not_allowed");
-    mk({
-      name: "Market allowed",
-      detail: st === "fail" ? `${market} is not in your allowed markets` : st === "skip" ? skipText : `${market} is on your list`,
-      value: st === "skip" ? "n/a" : market,
-      state: st,
-    });
+/**
+ * The risk check list, straight from the server's per rule results (`detail.riskChecks`). Failed checks first, then the
+ * rest in engine order. A rule with `passed: null` is shown as not run, never as passed.
+ */
+export function riskChecks(d: AlertDetail): ChecksResult {
+  const raw = Array.isArray(d.riskChecks) ? d.riskChecks : null;
+  if (!raw || raw.length === 0) {
+    const early = d.status === "duplicate" || d.status === "rejected_auth" || d.status === "invalid";
+    const beforeGate = d.status === "received" || d.status === "verified";
+    return {
+      items: [],
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      evaluated: 0,
+      total: 0,
+      failedName: null,
+      notChecked: true,
+      notCheckedWhy: early
+        ? "The alert did not pass verification, so no limit was checked."
+        : beforeGate
+          ? "The checks have not run yet."
+          : "Hermes did not store the check results for this alert.",
+      meta: "Not checked",
+    };
   }
 
-  // 3. Max position size
-  if (isClose) mk({ name: "Max position size", detail: closeSkip, value: "n/a", state: "skip" });
-  else {
-    const st = stateFor("size_above_max");
-    const resulting = resultingPosition(blockDetail);
-    mk({
-      name: "Max position size",
-      detail: st === "skip" ? skipText : st === "fail" ? "Position after this order" : "Order notional",
-      value: st === "skip" ? "n/a" : `${usd0(st === "fail" ? (resulting ?? notional) : notional)} / ${usd0(limits?.maxPositionUsd ?? null)}`,
-      state: st,
-    });
-  }
+  const items: CheckItem[] = raw.map((c) => {
+    const state: CheckItem["state"] = c.skipped || c.passed === null ? "skip" : c.passed ? "pass" : "fail";
+    const { detail, value } = describeCheck(c, d);
+    const aboveThreshold = c.key === "approval" && state === "pass" && Boolean(c.detail?.startsWith("Above"));
+    return { name: c.label, detail, value, state, ...(aboveThreshold ? { icon: Hand } : {}) };
+  });
 
-  // 4. Max leverage
-  if (isClose) mk({ name: "Max leverage", detail: closeSkip, value: "n/a", state: "skip" });
-  else {
-    const st = stateFor("leverage_above_max");
-    const lev = p.leverage ?? d.orders[0]?.leverage ?? null;
-    mk({
-      name: "Max leverage",
-      detail: st === "skip" ? skipText : lev === null ? "Not set by the alert" : "Requested by the alert",
-      value: st === "skip" ? "n/a" : `${lev === null ? "n/a" : formatLeverageX(lev, { decimals: 1 })} / ${limits ? formatLeverageX(limits.maxLeverage, { decimals: 0 }) : "n/a"}`,
-      state: st,
-    });
-  }
+  // A human decision after the gate is not a rule, but it is why an alert stopped. List it as the failing row.
+  if (d.blockReason === "approval_rejected") items.unshift({ name: "Approval", detail: "You rejected the order", value: "Rejected", state: "fail" });
+  else if (d.status === "expired" || d.blockReason === "approval_expired") items.unshift({ name: "Approval", detail: "Not approved in time", value: "Expired", state: "fail" });
 
-  // 5. Daily loss stop
-  if (isClose) mk({ name: "Daily loss stop", detail: closeSkip, value: "n/a", state: "skip" });
-  else {
-    const st = stateFor("daily_loss_stop_hit");
-    const today = new Date(d.receivedAt).toDateString() === new Date().toDateString();
-    const loss = account ? Math.max(0, -(account.realizedPnlTodayUsd + account.unrealizedPnlUsd)) : null;
-    mk({
-      name: "Daily loss stop",
-      detail: st === "skip" ? skipText : "Loss so far today",
-      value: st === "skip" ? "n/a" : `${today && loss !== null ? usd0(loss) : "n/a"} / ${usd0(limits?.dailyLossStopUsd ?? null)}`,
-      state: st,
-    });
-  }
-
-  // 6. Approval threshold
-  const approvalRejected = reason === "approval_rejected";
-  const approvalExpired = d.status === "expired" || reason === "approval_expired";
-  if (isClose) mk({ name: "Approval threshold", detail: closeSkip, value: "n/a", state: "skip" });
-  else if (approvalRejected || approvalExpired) {
-    mk({ name: "Approval threshold", detail: approvalRejected ? "You rejected the order" : "Not approved in time", value: approvalRejected ? "Rejected" : "Expired", state: "fail" });
-  } else if (!reachedRisk) {
-    mk({ name: "Approval threshold", detail: "Not reached, order already blocked", value: "n/a", state: "skip" });
-  } else {
-    mk({
-      name: "Approval threshold",
-      detail: needsApproval ? "Above the threshold, waited for you" : "Order notional",
-      value: `${usd0(notional)} / ${usd0(limits?.approvalThresholdUsd ?? null)}`,
-      state: "pass",
-      ...(needsApproval ? { icon: Hand } : {}),
-    });
-  }
-
-  // Failed first, then the rest in engine order.
-  const ordered = [...items.filter((i) => i.state === "fail"), ...items.filter((i) => i.state !== "fail")];
-  const failed = ordered.filter((i) => i.state === "fail");
+  const failedItems = items.filter((i) => i.state === "fail");
+  const ordered = [...failedItems, ...items.filter((i) => i.state !== "fail")];
+  const passed = ordered.filter((i) => i.state === "pass").length;
+  const skipped = ordered.filter((i) => i.state === "skip").length;
   return {
     items: ordered,
-    passed: ordered.filter((i) => i.state === "pass").length,
-    failed: failed.length,
-    failedName: failed.length ? String(failed[0]?.name) : null,
+    passed,
+    failed: failedItems.length,
+    skipped,
+    evaluated: passed + failedItems.length,
     total: ordered.length,
+    failedName: failedItems.length ? String(failedItems[0]?.name) : null,
+    notChecked: false,
+    notCheckedWhy: null,
+    meta: { failed: failedItems.length, passed, skipped },
   };
 }
+
+/** The `ms` of the order frame that was sent, bps. Null when no frame is recorded. */
+export const sentMaxSlippage = (frame: { fields: Record<string, unknown> } | null): number | null => (frame && isNum(frame.fields.ms) ? frame.fields.ms : null);
+
+/** `market` id to symbol, for frame comments. */
+export const symbolOfMarketId = (id: unknown): string | null => (Object.values(MARKETS).find((m) => m.id === id)?.symbol ?? null);
+
+export { formatBps, formatPrice };
+export type { Order };

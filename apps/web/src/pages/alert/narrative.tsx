@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { AlertDetail, BlockReason, RiskLimits } from "@hermes/shared";
-import { formatCountdown, formatLeverageX, formatUsd } from "../../lib/format";
+import { formatCountdown, formatLeverageX, formatUsd, shortId } from "../../lib/format";
 import { parsedOf, notionalOf, type ChecksResult } from "./derive";
+import { perplFailureReason } from "./frame";
 
 const M = ({ children }: { children: ReactNode }) => <span className="mono fg">{children}</span>;
 const usd0 = (v: number | null | undefined) => formatUsd(v ?? null, { decimals: 0 });
@@ -19,7 +20,9 @@ export function narrativeFor(d: AlertDetail, limits: RiskLimits | undefined, che
   const p = parsedOf(d);
   const reason: BlockReason | null = d.blockReason;
   const blockDetail = d.events.find((e) => e.status === "blocked")?.detail?.detail;
-  const resulting = typeof blockDetail === "string" ? Number(/position ([\d.]+) USD/.exec(blockDetail)?.[1]) : NaN;
+  // The position the order would have created: the size check's own value, else the number in the block text.
+  const sizeValue = d.riskChecks?.find((c) => c.key === "size")?.value;
+  const resulting = typeof sizeValue === "number" ? sizeValue : typeof blockDetail === "string" ? Number(/position ([\d.]+) USD/.exec(blockDetail)?.[1]) : NaN;
   const nothing = "Nothing was sent to Perpl.";
 
   if (d.status === "blocked" && reason) {
@@ -90,13 +93,31 @@ export function narrativeFor(d: AlertDetail, limits: RiskLimits | undefined, che
   }
   if (d.status === "duplicate") {
     const of = d.events.find((e) => e.status === "duplicate")?.detail?.duplicateOf;
-    return { tone: "neutral", limit: false, body: (<><b>Ignored as a duplicate.</b> It has the same alert id as <span className="mono">{String(of ?? "an earlier alert")}</span>, so Hermes did not act on it twice. {nothing}</>) };
+    return { tone: "neutral", limit: false, body: (<><b>Ignored as a duplicate.</b> It has the same alert id as <span className="mono" title={typeof of === "string" ? of : undefined}>{typeof of === "string" ? shortId(of) : "an earlier alert"}</span>, so Hermes did not act on it twice. {nothing}</>) };
   }
   if (d.status === "rejected_auth") return { tone: "negative", limit: false, body: (<><b>Hermes ignored this alert.</b> The secret did not match this strategy. Copy the message from Strategies into your TradingView alert again.</>) };
   if (d.status === "invalid") return { tone: "negative", limit: false, body: (<><b>The message was not valid.</b> Fix the fields listed in the timeline and send it again. {nothing}</>) };
+  if (d.status === "dry_run") {
+    return { tone: "neutral", limit: false, body: (<><b>Dry run.</b> All {checks.evaluated} checks passed, and nothing was sent to Perpl because this strategy is in dry run. Turn dry run off in Strategies to trade its alerts.</>) };
+  }
   if (d.status === "failed") {
     const msg = d.events.find((e) => e.status === "failed")?.detail?.message;
-    return { tone: "negative", limit: false, body: (<><b>The order did not fill.</b> {typeof msg === "string" ? msg : "Perpl did not fill the order."} It passed all {checks.total} checks, so your limits were not the cause.</>) };
+    const head = typeof msg === "string" && msg.trim() ? sentence(msg) : "The order did not fill.";
+    const why = perplFailureReason(d);
+    return {
+      tone: "negative",
+      limit: false,
+      body: (
+        <>
+          <b>{head}</b>
+          {why ? <> Perpl: {why}.</> : null}
+          {checks.evaluated > 0 && <> It passed all {checks.evaluated} checks, so your limits were not the cause.</>}
+        </>
+      ),
+    };
   }
   return null;
 }
+
+/** Ends a sentence with exactly one period. */
+const sentence = (t: string): string => `${t.trim().replace(/[.!?]+$/, "")}.`;

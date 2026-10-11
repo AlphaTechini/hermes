@@ -211,7 +211,7 @@ export function Histogram({ bins, median, height = 220, className, ...aria }: Hi
   const [hover, setHover] = useState<number | null>(null);
   const L = 32;
   const R = 8;
-  const T = 12;
+  const T = median ? 28 : 12; // headroom above the plot for the median label
   const B = 28;
   const { max, ticks } = niceMax(Math.max(...bins.map((b) => b.count), 1));
   const iw = Math.max(1, W - L - R);
@@ -252,14 +252,21 @@ export function Histogram({ bins, median, height = 220, className, ...aria }: Hi
               </g>
             );
           })}
-          {median && (
-            <>
-              <line x1={L + median.at * bw} x2={L + median.at * bw} y1={T} y2={T + ih} stroke="var(--text-secondary)" strokeWidth={1} />
-              <text x={L + median.at * bw + 6} y={T + 10} style={{ fill: "var(--text-secondary)" }}>
-                {median.label}
-              </text>
-            </>
-          )}
+          {median && (() => {
+            // The label lives in a band reserved above the plot (see T), so it can never sit on a bar, however tall the
+            // bars next to the median are. It goes right of the marker, or left of it when it would leave the chart.
+            const mx = L + median.at * bw;
+            const lw = median.label.length * 6.6 + 4;
+            const right = mx + 6 + lw <= W - R;
+            return (
+              <>
+                <line x1={mx} x2={mx} y1={T - 12} y2={T + ih} stroke="var(--text-secondary)" strokeWidth={1} />
+                <text x={right ? mx + 6 : mx - 6} y={T - 2} textAnchor={right ? "start" : "end"} style={{ fill: "var(--text-secondary)" }}>
+                  {median.label}
+                </text>
+              </>
+            );
+          })()}
           <line x1={L} x2={W - R} y1={T + ih} y2={T + ih} stroke="var(--chart-axis)" />
         </svg>
       )}
