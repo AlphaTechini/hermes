@@ -1,6 +1,6 @@
 import { DEFAULT_RISK_LIMITS, type RiskLimits } from "@hermes/shared";
 import { describe, expect, it } from "vitest";
-import { evaluate, type RiskIntent, type RiskState } from "../src/risk/evaluate";
+import { evaluate, evaluateDetailed, type RiskIntent, type RiskState } from "../src/risk/evaluate";
 
 const limits = (over: Partial<RiskLimits> = {}): RiskLimits => ({
   ...DEFAULT_RISK_LIMITS,
@@ -89,6 +89,19 @@ describe("evaluate: opens", () => {
     expect(evaluate(open(), limits({ dailyLossStopUsd: 0 }), state({ realizedPnlTodayUsd: -9999 })).ok).toBe(true);
   });
 
+  it("counts unrealised loss toward the daily loss stop (realised + unrealised, like the top bar)", () => {
+    expect(evaluate(open(), limits(), state({ realizedPnlTodayUsd: -100, unrealizedPnlUsd: -99 })).ok).toBe(true);
+    const r = evaluate(open(), limits(), state({ realizedPnlTodayUsd: -100, unrealizedPnlUsd: -100 }));
+    expect(r).toMatchObject({ ok: false, reason: "daily_loss_stop_hit" });
+    expect(r.ok === false && r.detail).toMatch(/realised -\$100\.00, unrealised -\$100\.00/);
+    // a winning open position offsets a realised loss
+    expect(evaluate(open(), limits(), state({ realizedPnlTodayUsd: -250, unrealizedPnlUsd: 120 })).ok).toBe(true);
+    // a closed-out profit does not hide an unrealised loss beyond the stop
+    expect(evaluate(open(), limits(), state({ realizedPnlTodayUsd: 50, unrealizedPnlUsd: -250 }))).toMatchObject({ reason: "daily_loss_stop_hit" });
+    // closes are never blocked by the stop
+    expect(evaluate(close(), limits(), state({ unrealizedPnlUsd: -999, positions: { BTC: { side: "long", size: 1, notionalUsd: 1 } } })).ok).toBe(true);
+  });
+
   it("blocks invalid sizes", () => {
     for (const n of [null, 0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(evaluate(open({ notionalUsd: n }), limits(), state())).toMatchObject({ ok: false, reason: "invalid_size" });
@@ -147,5 +160,62 @@ describe("evaluate: closes", () => {
     expect(evaluate(close(), limits(), { ...withLong, ordersLastMinute: 99 })).toMatchObject({ reason: "rate_limited" });
     expect(evaluate(close(), limits(), { ...withLong, perplConnected: false })).toMatchObject({ reason: "perpl_not_connected" });
     expect(evaluate(close(), limits(), { ...withLong, strategyEnabled: false })).toMatchObject({ reason: "strategy_disabled" });
+  });
+});
+
+describe("evaluateDetailed: per-rule results", () => {
+  const keys = (cs: { key: string }[]) => cs.map((c) => c.key);
+
+  it("lists every rule with value, limit and unit when the order passes", () => {
+    const r = evaluateDetailed(open({ notionalUsd: 600, leverage: 3 }), limits(), state({ realizedPnlTodayUsd: -50, unrealizedPnlUsd: -20, alertAgeSec: 2.34, ordersLastMinute: 4 }));
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.needsApproval).toBe(true);
+    expect(keys(r.checks)).toEqual(["strategy_enabled", "alert_age", "rate_limit", "perpl_connected", "pause", "markets", "daily_loss", "size_known", "leverage", "size", "approval"]);
+    expect(r.checks.every((c) => c.passed === true && !c.skipped)).toBe(true);
+    const by = Object.fromEntries(r.checks.map((c) => [c.key, c]));
+    expect(by.alert_age).toMatchObject({ value: 2.3, limit: 60, unit: "s" });
+    expect(by.rate_limit).toMatchObject({ value: 4, limit: 10, unit: "orders/min" });
+    expect(by.markets).toMatchObject({ value: "BTC", unit: null });
+    expect(by.daily_loss).toMatchObject({ value: 70, limit: 200, unit: "USD" });
+    expect(by.leverage).toMatchObject({ value: 3, limit: 5, unit: "x" });
+    expect(by.size).toMatchObject({ value: 600, limit: 1000, unit: "USD" });
+    expect(by.approval).toMatchObject({ value: 600, limit: 500, unit: "USD", passed: true });
+    expect(by.approval?.detail).toMatch(/above the approval threshold/i);
+  });
+
+  it("on a block: the failing check, everything before it, and the rest skipped", () => {
+    const r = evaluateDetailed(open({ market: "ETH" }), limits({ allowedMarkets: ["BTC"] }), state());
+    expect(r).toMatchObject({ ok: false, reason: "market_not_allowed" });
+    const failed = r.checks.findIndex((c) => c.passed === false);
+    expect(r.checks[failed]).toMatchObject({ key: "markets", passed: false, skipped: false, value: "ETH", limit: "BTC" });
+    expect(r.checks.slice(0, failed).every((c) => c.passed === true)).toBe(true);
+    const rest = r.checks.slice(failed + 1);
+    expect(keys(rest)).toEqual(["daily_loss", "size_known", "leverage", "size", "approval"]);
+    expect(rest.every((c) => c.passed === null && c.skipped === true)).toBe(true);
+  });
+
+  it("evaluates the same rules in the same order as evaluate()", () => {
+    for (const [i, l, s] of [
+      [open(), limits({ paused: true }), state()],
+      [open({ leverage: 9 }), limits(), state()],
+      [open({ notionalUsd: 5000 }), limits(), state()],
+      [open(), limits(), state({ perplConnected: false })],
+      [open(), limits(), state({ realizedPnlTodayUsd: -500 })],
+    ] as const) {
+      const detailed = evaluateDetailed(i, l, s);
+      const { checks: _c, ...plain } = detailed;
+      expect(plain).toEqual(evaluate(i, l, s));
+    }
+  });
+
+  it("closes evaluate the global rules and the position, and skip the open-only limits", () => {
+    const withLong = state({ positions: { BTC: { side: "long", size: 0.01, notionalUsd: 1000 } } });
+    const r = evaluateDetailed(close(), limits({ paused: true }), withLong);
+    expect(r).toEqual({ ok: true, needsApproval: false, checks: r.checks });
+    expect(r.checks.filter((c) => c.passed === true).map((c) => c.key)).toEqual(["strategy_enabled", "alert_age", "rate_limit", "perpl_connected", "position_to_close"]);
+    expect(r.checks.filter((c) => c.skipped).map((c) => c.key)).toEqual(["pause", "markets", "daily_loss", "size_known", "leverage", "size", "approval"]);
+    const none = evaluateDetailed(close(), limits(), state());
+    expect(none).toMatchObject({ ok: false, reason: "no_position_to_close" });
+    expect(none.checks.find((c) => c.key === "position_to_close")).toMatchObject({ passed: false, value: "None" });
   });
 });

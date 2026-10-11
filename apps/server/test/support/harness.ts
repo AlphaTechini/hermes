@@ -73,7 +73,7 @@ export async function waitFor<T>(fn: () => T | undefined | false | null, timeout
   }
 }
 
-const SETTLED = ["filled", "partially_filled", "blocked", "failed", "expired", "pending_approval", "rejected_auth", "invalid", "duplicate"];
+const SETTLED = ["dry_run", "filled", "partially_filled", "blocked", "failed", "expired", "pending_approval", "rejected_auth", "invalid", "duplicate"];
 export async function settled(h: Harness, alertId: string) {
   return waitFor(() => {
     const a = h.repos.alerts.get(alertId);

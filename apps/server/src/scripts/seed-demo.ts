@@ -1,9 +1,15 @@
 /**
- * Seed the demo user with two strategies and ~200 historical alerts over 14 days.
+ * Seed the demo user with three strategies and ~250 historical alerts over 14 days:
+ *  - "BTC trend 15m": a B on the 7 day report card, approval-gated orders with decision times;
+ *  - "ETH mean reversion 5m": a healthy strategy with approvals approved, expired and rejected;
+ *  - "SOL breakout 1h": a dry-run strategy (alerts run every check and stop at `dry_run`).
+ * Every alert that reached the risk gate carries the per-rule results in its events (`detail.checks`), every order has
+ * its raw Perpl frames (mt:22 sent, mt:3 / mt:24 / mt:25 received).
  *   pnpm --filter @hermes/server seed:demo
  * Deterministic (seeded PRNG) except for the strategy secrets. Re-running replaces the demo user's data.
  */
 import { existsSync } from "node:fs";
+import { OrderFlag, OrderStatus, OrderType, SIM_MARKETS, buildOrderRequest, sizeToLots } from "@hermes/perpl";
 import {
   MARKETS,
   RiskLimits,
@@ -22,6 +28,8 @@ import { encrypt, generateSecret, shortId } from "../crypto";
 import { openDb } from "../db/connection";
 import { createRepos, utcDay, type Repos } from "../db/repos";
 import { SIM_START_BALANCE_AUSD, generateSimCredentials } from "../perpl/sim-keys";
+import { buildReportCard, priorWindow, rangeStart } from "../reports/report-card";
+import { evaluateDetailed, type DetailedRiskResult } from "../risk/evaluate";
 
 const DAY = 86_400_000;
 
@@ -46,12 +54,89 @@ interface StrategySpec {
   winRate: number;
   winMove: [number, number];
   lossMove: [number, number];
+  /** Share of orders Perpl rejects or that never get a status. */
+  failRate: number;
+  /** Alert-to-fill latency range, ms (skewed to the low end). */
+  latency: [number, number];
+  /** Typical adverse slippage, bps. */
+  slip: [number, number];
 }
 
 const SPECS: StrategySpec[] = [
-  { name: "BTC trend 15m", market: "BTC", alerts: 108, basePrice: 112_000, sizeRange: [500, 2000], leverage: 3, winRate: 0.6, winMove: [0.002, 0.011], lossMove: [0.0015, 0.007] },
-  { name: "ETH mean reversion 5m", market: "ETH", alerts: 94, basePrice: 3_900, sizeRange: [400, 1500], leverage: 2, winRate: 0.54, winMove: [0.0015, 0.008], lossMove: [0.002, 0.009] },
+  { name: "BTC trend 15m", market: "BTC", alerts: 108, basePrice: 112_000, sizeRange: [500, 2000], leverage: 3, winRate: 0.6, winMove: [0.002, 0.011], lossMove: [0.0015, 0.007], failRate: 0.085, latency: [380, 1250], slip: [2.2, 7.5] },
+  { name: "ETH mean reversion 5m", market: "ETH", alerts: 94, basePrice: 3_900, sizeRange: [400, 1500], leverage: 2, winRate: 0.54, winMove: [0.0015, 0.008], lossMove: [0.002, 0.009], failRate: 0.03, latency: [300, 800], slip: [0.8, 5.2] },
 ];
+
+const SIM_MARKET = new Map(SIM_MARKETS.map((m) => [m.symbol, m]));
+const SIM_ACCOUNT_ID = 1001;
+
+/** The raw frames Perpl would have exchanged for one seeded order (shapes follow docs/research/perpl.md). */
+function seedFrames(
+  repos: Repos,
+  f: {
+    orderId: string;
+    market: MarketSymbol;
+    side: Side;
+    kind: "open" | "close";
+    leverage: number;
+    sizeBase: number;
+    rq: number;
+    sn: number;
+    lb: number;
+    maxSlippageBps: number;
+    tSent: number;
+    tAccepted: number;
+    tFill: number;
+    outcome: "filled" | "rejected" | "timeout";
+    fillPrice?: number;
+    fee?: number;
+    txHash?: string;
+    perplOrderId?: number;
+  },
+): void {
+  const m = SIM_MARKET.get(f.market);
+  if (!m) return;
+  const type =
+    f.kind === "open" ? (f.side === "long" ? OrderType.OpenLong : OrderType.OpenShort) : f.side === "long" ? OrderType.CloseLong : OrderType.CloseShort;
+  const lots = sizeToLots(f.sizeBase, m.sizeDecimals, "floor");
+  const put = (direction: "out" | "in", mt: number, atMs: number, frame: object) =>
+    repos.orderFrames.insert({ orderId: f.orderId, direction, mt, atMs: Math.round(atMs * 1000) / 1000, json: JSON.stringify(frame) });
+  put(
+    "out",
+    22,
+    f.tSent,
+    buildOrderRequest(
+      { rq: f.rq, mkt: m.id, acc: SIM_ACCOUNT_ID, t: type, p: 0, s: lots, ms: f.maxSlippageBps, fl: OrderFlag.ImmediateOrCancel, lv: f.kind === "open" ? Math.round(f.leverage * 100) : 100, lb: f.lb },
+      f.sn,
+    ),
+  );
+  if (f.outcome === "timeout") return; // no status ever arrived
+  const block = f.lb + 1;
+  const mt3At = f.tSent + (f.tAccepted - f.tSent) * 0.35;
+  put("in", 3, mt3At, { mt: 3, sid: 100, sn: f.sn + 90_000, cid: f.sn, status: { code: 0 } });
+  const oid = f.perplOrderId ?? 700_000 + f.rq;
+  const base = { rq: f.rq, mkt: m.id, acc: SIM_ACCOUNT_ID, oid, scid: oid, t: type, p: 0, os: lots, fl: OrderFlag.ImmediateOrCancel, mm: 0, lv: f.kind === "open" ? Math.round(f.leverage * 100) : 100 };
+  if (f.outcome === "rejected") {
+    put("in", 24, f.tFill, {
+      mt: 24,
+      sn: block + 1,
+      at: { b: block + 1, t: Math.round(f.tFill) },
+      d: [{ ...base, at: { b: block + 1, t: Math.round(f.tFill) }, st: OrderStatus.Failed, sr: 1, fp: 0, fs: 0, f: "0" }],
+    });
+    return;
+  }
+  put("in", 24, f.tAccepted, {
+    mt: 24,
+    sn: block,
+    at: { b: block, t: Math.round(f.tAccepted) },
+    d: [{ ...base, at: { b: block, t: Math.round(f.tAccepted) }, c: { b: block, t: Math.round(f.tAccepted) }, st: OrderStatus.Open, sr: 0, fp: 0, fs: 0, f: "0" }],
+  });
+  const fp = Math.round((f.fillPrice ?? 0) * 10 ** m.priceDecimals);
+  const feeCns = String(Math.round((f.fee ?? 0) * 1e6));
+  const at = { b: block + 2, t: Math.round(f.tFill), txid: f.txHash };
+  put("in", 24, f.tFill, { mt: 24, sn: block + 2, at: { b: block + 2, t: Math.round(f.tFill) }, d: [{ ...base, at, st: OrderStatus.Filled, sr: 0, fp, fs: lots, f: feeCns, r: true }] });
+  put("in", 25, f.tFill + 0.8, { mt: 25, at: { b: block + 2, t: Math.round(f.tFill) }, d: [{ at, mkt: m.id, acc: SIM_ACCOUNT_ID, oid, t: type, l: 2, p: fp, s: lots, f: feeCns }] });
+}
 
 async function main() {
   for (const f of [".env", "apps/server/.env"]) if (existsSync(f)) process.loadEnvFile(f);
@@ -82,6 +167,7 @@ async function main() {
       maxLeverage: 10,
       dailyLossStopUsd: 250,
       approvalThresholdUsd: 2500,
+      approvalExpirySec: 120,
     }),
   );
   // PERPL_MODE=sim: connect the demo user to a simulated Perpl account (fresh Ed25519 key, account 1001, 10,000 AUSD),
@@ -104,7 +190,7 @@ async function main() {
   }
 
   const dailyPnl = new Map<string, number>();
-  const stats = { alerts: 0, filled: 0, blocked: 0, failed: 0, other: 0 };
+  const stats = { alerts: 0, filled: 0, blocked: 0, failed: 0, other: 0, dryRun: 0, riskMismatch: 0 };
   const created: { id: string; name: string; secret: string }[] = [];
   const finalPositions: Parameters<Repos["positions"]["replaceAll"]>[1] = [];
 
@@ -119,6 +205,7 @@ async function main() {
       defaultMarket: spec.market,
       defaultSizeUsd: Math.round((spec.sizeRange[0] + spec.sizeRange[1]) / 2 / 50) * 50,
       defaultLeverage: spec.leverage,
+      maxSlippageBps: specIdx === 0 ? 30 : null,
       createdAt: now - 14 * DAY - 3600_000,
     });
     created.push({ id: strategy.id, name: spec.name, secret });
@@ -134,9 +221,11 @@ async function main() {
     const invalidAt = new Set([Math.floor(spec.alerts * 0.35), Math.floor(spec.alerts * 0.8)]);
     // Large opening orders that wait for human approval: taken by the first clean "open" at/after each index.
     const approvalQueue: { idx: number; mode: "approved" | "expired" | "rejected" }[] = [
+      { idx: Math.floor(spec.alerts * 0.12), mode: "approved" },
       { idx: Math.floor(spec.alerts * 0.3), mode: "approved" },
       { idx: Math.floor(spec.alerts * 0.55), mode: "approved" },
       { idx: Math.floor(spec.alerts * 0.72), mode: "expired" },
+      { idx: Math.floor(spec.alerts * 0.85), mode: "approved" },
       ...(specIdx === 1 ? [{ idx: Math.floor(spec.alerts * 0.9), mode: "rejected" as const }] : []),
     ];
 
@@ -198,7 +287,7 @@ async function main() {
         status = "blocked";
         reason = "no_position_to_close";
         detail = { detail: `No open ${spec.market} position.` };
-      } else if (chance(0.04)) {
+      } else if (chance(spec.failRate)) {
         status = "failed";
         errorCode = chance(0.6) ? "order_rejected" : "timeout";
       }
@@ -275,14 +364,30 @@ async function main() {
       });
       ev("verified", recvMs + between(0.8, 1.9), { key: "id" });
       const tRisk = recvMs + between(2.4, 4.5);
+      // The same gate the live pipeline runs, so seeded history shows real per-rule results (also for blocked alerts).
+      const risk: DetailedRiskResult = evaluateDetailed(
+        { market: marketForAlert, kind, side, notionalUsd: kind === "open" ? sizeUsd : null, leverage },
+        limits,
+        {
+          strategyEnabled: true,
+          positions: pos ? { [spec.market]: { side: pos.side, size: pos.size, notionalUsd: pos.size * alertPrice } } : {},
+          realizedPnlTodayUsd: dailyPnl.get(day) ?? 0,
+          unrealizedPnlUsd: 0,
+          openNotionalUsd: 0,
+          ordersLastMinute: reason === "rate_limited" ? limits.maxOrdersPerMinute : Math.floor(between(0, 4)),
+          perplConnected: true,
+          alertAgeSec: ageSec,
+        },
+      );
+      if (status === "blocked" && reason !== "approval_rejected" && (risk.ok || risk.reason !== reason)) stats.riskMismatch++;
 
       if (status === "blocked" && reason !== "approval_rejected") {
-        ev("blocked", tRisk, { reason, ...detail });
+        ev("blocked", tRisk, { reason, ...detail, ...(!risk.ok ? { detail: risk.detail } : {}), checks: risk.checks });
         repos.alerts.patch(alertId, { status, blockReason: reason });
         stats.blocked++;
         continue;
       }
-      ev("risk_checked", tRisk, { needsApproval: Boolean(approval && kind === "open"), notionalUsd: sizeUsd });
+      ev("risk_checked", tRisk, { needsApproval: Boolean(approval && kind === "open"), notionalUsd: sizeUsd, checks: risk.checks });
 
       let tExec = tRisk;
       if (approval && kind === "open") {
@@ -311,7 +416,7 @@ async function main() {
       }
 
       // --- order ---
-      const latency = 300 + 600 * Math.pow(rng(), 1.7); // 300..900 ms, skewed to the low end
+      const latency = spec.latency[0] + (spec.latency[1] - spec.latency[0]) * Math.pow(rng(), 2.2); // skewed to the low end
       const marketId = MARKETS[spec.market].id;
       const tSent = tExec + latency * 0.22;
       const tAccepted = tExec + latency * 0.55;
@@ -333,17 +438,22 @@ async function main() {
       const sn = (stats.alerts % 60000) + 1;
       const lb = 9_000_000 + Math.floor((t - (now - 14 * DAY)) / 400);
       ev("sent", tSent, { orderId: order.id, rq, sn, lb });
+      const maxSlippageBps = strategy.maxSlippageBps ?? limits.defaultSlippageBps;
 
       if (status === "failed") {
         ev("failed", tFill + (errorCode === "timeout" ? 4_000 : 0), { orderId: order.id, code: errorCode, message: errorCode === "timeout" ? "No status from Perpl before lb expired" : "Order rejected by Perpl" });
         db.prepare("UPDATE orders SET rq=?, sn=?, lb=?, status='failed', error_code=?, updated_at=? WHERE id=?").run(rq, sn, lb, errorCode, Math.round(tFill), order.id);
+        seedFrames(repos, {
+          orderId: order.id, market: spec.market, side, kind, leverage, sizeBase, rq, sn, lb, maxSlippageBps, tSent, tAccepted, tFill,
+          outcome: errorCode === "timeout" ? "timeout" : "rejected",
+        });
         repos.alerts.patch(alertId, { status: "failed", errorCode });
         stats.failed++;
         continue;
       }
 
       // slippage 0..12 bps worse than the alert price, mostly 1..5
-      const slip = chance(0.07) ? between(6, 12) : chance(0.06) ? 0 : between(0.8, 5.2);
+      const slip = chance(0.07) ? between(spec.slip[1] + 0.5, spec.slip[1] + 7) : chance(0.06) ? 0 : between(...spec.slip);
       const dirSign: number = tradeDirection(side, kind) === "buy" ? 1 : -1;
       let realized: number | null = null;
       if (kind === "close" && pos) {
@@ -378,6 +488,10 @@ async function main() {
         atMs: Math.round(tFill * 1000) / 1000,
       });
       ev("filled", tFill, { orderId: order.id, price: fillPrice, size: sizeFilled, txHash });
+      seedFrames(repos, {
+        orderId: order.id, market: spec.market, side, kind, leverage, sizeBase: sizeFilled, rq, sn, lb, maxSlippageBps, tSent, tAccepted, tFill,
+        outcome: "filled", fillPrice, fee, txHash, perplOrderId: 700_000 + stats.alerts,
+      });
       db.prepare("UPDATE orders SET rq=?, sn=?, lb=?, perpl_order_id=?, status='filled', tx_hash=?, price=?, updated_at=? WHERE id=?").run(
         rq, sn, lb, String(700_000 + stats.alerts), txHash, fillPrice, Math.round(tFill), order.id,
       );
@@ -407,18 +521,85 @@ async function main() {
     }
   }
 
+  // --- a dry-run strategy: every alert runs all the checks and stops at `dry_run` (nothing reaches Perpl) ---
+  {
+    const secret = generateSecret();
+    const strategy = repos.strategies.create({
+      id: shortId(12),
+      userId: user.id,
+      name: "SOL breakout 1h",
+      secretEnc: encrypt(secret, config.masterKey),
+      enabled: true,
+      defaultMarket: "SOL",
+      defaultSizeUsd: 600,
+      defaultLeverage: 2,
+      dryRun: true,
+      createdAt: now - 10 * DAY,
+    });
+    created.push({ id: strategy.id, name: strategy.name, secret });
+    const solAt = (t: number) => 210 * (1 + 0.04 * Math.sin(t / DAY / 1.9) + 0.01 * Math.sin((t / DAY) * 8));
+    const times = Array.from({ length: 26 }, () => now - between(20 * 60_000, 10 * DAY)).sort((a, b) => a - b);
+    for (const [i, t] of times.entries()) {
+      const side: Side = i % 2 === 0 ? "long" : "short";
+      const alertId = `alr_${shortId(14)}`;
+      const recvMs = Math.round(t * 1000) / 1000 + 0.214;
+      const price = Number(solAt(t).toFixed(2));
+      const sizeUsd = Math.round(between(300, 900) / 50) * 50;
+      const stale = i % 13 === 7;
+      const ageSec = stale ? between(80, 200) : between(0.3, 2.2);
+      const body = JSON.stringify({ secret: "[redacted]", action: side, market: "SOLUSDT.P", size_usd: sizeUsd, price, time: new Date(t - ageSec * 1000).toISOString(), id: `seed-sol-${i}` });
+      repos.alerts.insert({ id: alertId, strategyId: strategy.id, userId: user.id, rawBody: body, status: "received", receivedAtMs: recvMs, createdAt: Math.round(t) });
+      const ev = (st: AlertStatus, atMs: number, d?: Record<string, unknown>) => repos.alerts.addEvent(alertId, st, Math.round(atMs * 1000) / 1000, d ?? null);
+      ev("received", recvMs, { source: "webhook" });
+      const parsed: NormalizedAlert = { action: side, intent: { side, kind: "open" }, market: "SOL", orderType: "market", price, sizeUsd, leverage: 2 };
+      repos.alerts.patch(alertId, { idempotencyKey: `id:seed-sol-${i}`, parsedJson: JSON.stringify(parsed), market: "SOL", side, kind: "open", sizeUsd, alertPrice: price });
+      ev("verified", recvMs + between(0.8, 1.9), { key: "id" });
+      const tRisk = recvMs + between(2.4, 4.5);
+      const risk = evaluateDetailed(
+        { market: "SOL", kind: "open", side, notionalUsd: sizeUsd, leverage: 2 },
+        limits,
+        { strategyEnabled: true, positions: {}, realizedPnlTodayUsd: 0, unrealizedPnlUsd: 0, openNotionalUsd: 0, ordersLastMinute: 0, perplConnected: true, alertAgeSec: ageSec },
+      );
+      if (!risk.ok) {
+        ev("blocked", tRisk, { reason: risk.reason, detail: risk.detail, checks: risk.checks });
+        repos.alerts.patch(alertId, { status: "blocked", blockReason: risk.reason });
+        stats.blocked++;
+        stats.alerts++;
+        continue;
+      }
+      ev("risk_checked", tRisk, { needsApproval: risk.needsApproval, notionalUsd: sizeUsd, checks: risk.checks });
+      ev("dry_run", tRisk + between(0.4, 1.1), { needsApproval: risk.needsApproval, notionalUsd: sizeUsd, message: "Dry run: all checks passed, nothing was sent to Perpl." });
+      repos.alerts.patch(alertId, { status: "dry_run" });
+      stats.dryRun++;
+      stats.alerts++;
+    }
+  }
+
   repos.positions.replaceAll(user.id, finalPositions);
   // Seeded alerts are history, live ones land on top. Make sure a bad seeded day cannot trip today's daily loss stop
   // and block the live demo: never let today's seeded realised PnL sit below 40% of the stop.
   const today = utcDay(now);
-  const floor = -limits.dailyLossStopUsd * 0.4;
+  // The stop is evaluated against realised + unrealised PnL, so the open positions' PnL counts too.
+  const floor = -limits.dailyLossStopUsd * 0.4 - finalPositions.reduce((a, p) => a + p.upnl, 0);
   const todayPnl = repos.dailyPnl.get(user.id, today);
   if (todayPnl < floor) repos.dailyPnl.add(user.id, today, floor - todayPnl);
   const total = db.prepare("SELECT COUNT(*) AS n FROM alerts WHERE user_id = ?").get(user.id) as { n: number };
 
   console.log(`Seeded demo user ${user.id} into ${config.databasePath} at ${new Date(hiresNowMs()).toISOString()}`);
   console.log(`  perpl: ${connectedAs}`);
-  console.log(`  alerts: ${total.n} (filled ${stats.filled}, blocked/expired ${stats.blocked}, failed ${stats.failed}, other ${stats.other})`);
+  console.log(`  alerts: ${total.n} (filled ${stats.filled}, blocked/expired ${stats.blocked}, failed ${stats.failed}, dry run ${stats.dryRun}, other ${stats.other})`);
+  if (stats.riskMismatch > 0) console.log(`  note: ${stats.riskMismatch} seeded blocks did not match the live risk gate`);
+  const frames = (db.prepare("SELECT COUNT(*) AS n FROM order_frames").get() as { n: number }).n;
+  const gated = (db.prepare("SELECT COUNT(*) AS n FROM approvals WHERE user_id = ?").get(user.id) as { n: number }).n;
+  console.log(`  order frames: ${frames}, approvals: ${gated}`);
+  for (const c of created) {
+    const alerts = repos.reports.alertsForStrategy(c.id, rangeStart("7d", now) ?? 0);
+    const pw = priorWindow("7d", now);
+    const card = buildReportCard({ strategy: { id: c.id, name: c.name }, range: "7d", now, alerts, ...(pw ? { priorAlerts: repos.reports.alertsForStrategy(c.id, pw.since, pw.until) } : {}) });
+    console.log(
+      `  7d report ${c.name}: grade ${card.grade ?? "n/a"} (${card.score ?? card.gradeReason}) fill ${card.fillRate === null ? "n/a" : (card.fillRate * 100).toFixed(1) + "%"} median slippage ${card.slippage.medianBps ?? "n/a"} bps p95 ${card.latency.p95Ms ?? "n/a"} ms eligible ${card.counts.eligible}`,
+    );
+  }
   for (const c of created) {
     console.log(`  ${c.name}: ${config.publicBaseUrl}/hooks/${c.id}   secret: ${c.secret}`);
   }

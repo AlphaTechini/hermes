@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   Ed25519Signer,
   PerplChain,
+  PerplHttpError,
   PerplClient as RawPerplClient,
   PerplRest,
   toServerClient,
@@ -206,6 +207,8 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
       clearTimeout(pre.timer);
       this.validated.delete(userId);
       this.adopt(entry, pre.raw);
+      // head block and round trip right away, so the response to PUT /api/perpl/connection already carries them
+      await this.probeLatency(entry);
       this.publish(entry);
       return;
     }
@@ -413,8 +416,10 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
       const mine = accounts.find((a) => a.in === ctx.instance.id) ?? accounts[0];
       if (mine) return String(mine.id);
     } catch (err) {
-      // the simulator answers 401 for a key it no longer knows: the stored connection (if any) still names the account
-      if (!(this.o.simulator && storedSameKey)) throw toHermesError(classifyPerplError(err));
+      // The simulator answers 401 for a key it does not know (it keeps no state across restarts): that is "no account",
+      // not "bad key", and the stored connection (if any) still names the account.
+      const unknownToSim = this.o.simulator && err instanceof PerplHttpError && (err.status === 401 || err.status === 403);
+      if (!unknownToSim) throw toHermesError(classifyPerplError(err));
     }
     if (storedSameKey && this.o.simulator) return storedSameKey;
     if (!this.o.simulator && walletAddress) {

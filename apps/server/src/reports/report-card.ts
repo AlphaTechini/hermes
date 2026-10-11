@@ -85,6 +85,8 @@ const failureLabel = (code: string): string =>
   FAILURE_LABELS[code] ?? (code.startsWith("sr:") ? `Perpl rejected the order (reason ${code.slice(3)})` : `Failed: ${code}`);
 
 
+const isStatus = (s: AlertStatus, ...list: AlertStatus[]) => list.includes(s);
+
 const RANGE_MS: Record<Exclude<ReportRange, "all">, number> = { "24h": 86_400_000, "7d": 7 * 86_400_000, "30d": 30 * 86_400_000 };
 
 export function rangeStart(range: ReportRange, now: number): number | null {

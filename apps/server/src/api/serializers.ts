@@ -19,6 +19,9 @@ export function toStrategyDTO(config: Config, repos: Repos, s: StrategyRow): Str
     templates: tradingViewTemplates(),
     alertCount: stats.alertCount,
     lastAlertAt: stats.lastAlertAt,
+    dryRun: s.dryRun,
+    maxSlippageBps: s.maxSlippageBps,
+    orderType: s.orderType,
   };
 }
 

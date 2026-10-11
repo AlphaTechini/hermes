@@ -19,6 +19,7 @@ import {
   type AlertListResponse,
   type IngestResponse,
   type PerplConnectionDTO,
+  type PerplContextDTO,
   type PerplLinkStatus,
   type StreamEvent,
   type StreamTicket,
@@ -29,13 +30,14 @@ import { z } from "zod";
 import type { Auth } from "../auth/plugin";
 import type { Config } from "../config";
 import { decrypt, encrypt, generateSecret, shortId } from "../crypto";
-import { utcDay, type Repos } from "../db/repos";
+import type { Repos } from "../db/repos";
 import type { EventBus } from "../events/bus";
 import { HermesError, notFound } from "../errors";
 import type { Ingest } from "../ingest/handler";
 import type { PerplRuntime } from "../perpl/runtime";
 import type { Pipeline } from "../pipeline/pipeline";
-import { buildReportCard, rangeStart } from "../reports/report-card";
+import { buildReportCard, priorWindow, rangeStart } from "../reports/report-card";
+import { withTodayPnl } from "../risk/today";
 import { LimitQuery, parse } from "./helpers";
 import { toStrategyDTO, toStrategySecretDTO, toUserDTO } from "./serializers";
 
@@ -177,6 +179,9 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         defaultMarket: market || null,
         defaultSizeUsd: body.defaultSizeUsd ?? null,
         defaultLeverage: body.defaultLeverage ?? null,
+        dryRun: body.dryRun ?? false,
+        maxSlippageBps: body.maxSlippageBps ?? null,
+        orderType: body.orderType ?? "market",
       });
       return reply.code(201).send(toStrategySecretDTO(config, repos, row));
     });
@@ -192,6 +197,9 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
       if (body.defaultMarket !== undefined) patch.defaultMarket = body.defaultMarket ? normalizeMarket(body.defaultMarket) || null : null;
       if (body.defaultSizeUsd !== undefined) patch.defaultSizeUsd = body.defaultSizeUsd;
       if (body.defaultLeverage !== undefined) patch.defaultLeverage = body.defaultLeverage;
+      if (body.dryRun !== undefined) patch.dryRun = body.dryRun;
+      if (body.maxSlippageBps !== undefined) patch.maxSlippageBps = body.maxSlippageBps;
+      if (body.orderType !== undefined) patch.orderType = body.orderType;
       const updated = repos.strategies.update(s.id, patch) ?? s;
       return toStrategyDTO(config, repos, updated);
     });
@@ -281,12 +289,13 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
       const userId = req.user.id;
       const client = perpl()?.get(userId);
       const conn = repos.connections.get(userId);
-      const realizedPnlTodayUsd = repos.dailyPnl.get(userId, utcDay(Date.now()));
+      // todayPnlUsd = realised (database) + unrealised (Perpl position snapshot): what the loss stop is evaluated against
+      const decorate = (a: AccountSummary): AccountSummary => withTodayPnl(repos, userId, a);
       if (client?.isConnected()) {
         try {
           const live = await client.getAccount();
           if (live.collateralUsd > 0) repos.connections.setCollateral(userId, live.collateralUsd);
-          return { ...live, realizedPnlTodayUsd, live: true };
+          return decorate({ ...live, live: true });
         } catch (err) {
           req.log.warn({ err }, "getAccount failed, falling back to stored snapshot");
         }
@@ -295,7 +304,7 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
       const openNotionalUsd = positions.reduce((a, p) => a + p.notionalUsd, 0);
       const unrealizedPnlUsd = positions.reduce((a, p) => a + p.upnl, 0);
       const collateralUsd = conn?.collateral ?? 0;
-      return {
+      return decorate({
         connected: false,
         accountId: conn?.accountId ?? null,
         collateralUsd,
@@ -303,10 +312,10 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         availableUsd: Math.max(0, collateralUsd + unrealizedPnlUsd - openNotionalUsd / 10),
         openNotionalUsd,
         unrealizedPnlUsd,
-        realizedPnlTodayUsd,
+        realizedPnlTodayUsd: 0,
         updatedAt: Date.now(),
         live: false,
-      };
+      });
     });
 
     // --- approvals ---
@@ -371,9 +380,27 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     };
 
     api.get("/api/perpl/connection", async (req) => connectionDto(req.user.id));
+    api.get("/api/perpl/context", async (): Promise<PerplContextDTO> => {
+      const rt = perpl();
+      if (!rt?.context) throw new HermesError(503, "perpl_unreachable", "The Perpl integration is not running, so its context is unavailable.");
+      return rt.context();
+    });
     api.put("/api/perpl/connection", async (req) => {
       const body = parse(PutPerplConnectionRequest, req.body);
-      return saveConnection(req.user.id, { accountId: body.accountId, apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate });
+      let accountId = body.accountId;
+      if (accountId === undefined) {
+        // No account id given: find it from the API key, then from the user's wallet address.
+        const rt = perpl();
+        if (!rt?.lookupAccount) {
+          throw new HermesError(400, "perpl_account_not_found", "Could not look up the Perpl account automatically. Enter the account id.");
+        }
+        const wallet =
+          req.user.walletAddress ??
+          (repos.db.prepare("SELECT address FROM privy_wallets WHERE user_id = ?").get(req.user.id) as { address: string } | undefined)?.address ??
+          null;
+        accountId = await rt.lookupAccount(req.user.id, { apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate }, wallet);
+      }
+      return saveConnection(req.user.id, { accountId, apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate });
     });
     api.delete("/api/perpl/connection", async (req) => {
       repos.connections.delete(req.user.id);
@@ -400,7 +427,10 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         const range = parse(ReportRangeSchema.default("30d"), req.query.range);
         const now = Date.now();
         const alerts = repos.reports.alertsForStrategy(s.id, rangeStart(range, now) ?? 0);
-        return buildReportCard({ strategy: { id: s.id, name: s.name }, range, now, alerts });
+        const pw = priorWindow(range, now);
+        const priorAlerts = pw ? repos.reports.alertsForStrategy(s.id, pw.since, pw.until) : undefined;
+        const slippageCapBps = s.maxSlippageBps ?? repos.limits.get(req.user.id).defaultSlippageBps;
+        return buildReportCard({ strategy: { id: s.id, name: s.name }, range, now, alerts, priorAlerts, slippageCapBps });
       },
     );
   });

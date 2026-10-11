@@ -1,4 +1,4 @@
-import { MsgType, type PerplTradingSocket } from "@hermes/perpl";
+import { MsgType, type FillsFrame, type OrdersFrame, type PerplTradingSocket, type StatusResponseFrame } from "@hermes/perpl";
 import { hiresNowMs } from "@hermes/shared";
 import type { Repos } from "../db/repos";
 
@@ -45,9 +45,14 @@ export class OrderFrameRecorder {
       }
     };
     const offs = [
-      socket.on("status", guard((s: Record<string, unknown>) => this.onStatus(st, s))),
-      socket.on("orders", guard(({ snapshot, frame }: { snapshot: boolean; frame: Record<string, unknown> }) => { if (!snapshot) this.onOrders(st, frame); })),
-      socket.on("fills", guard((f: Record<string, unknown>) => this.onFills(st, f))),
+      socket.on("status", guard((s: StatusResponseFrame) => this.onStatus(st, s as unknown as Record<string, unknown>))),
+      socket.on(
+        "orders",
+        guard(({ snapshot, frame }: { snapshot: boolean; frame: OrdersFrame }) => {
+          if (!snapshot) this.onOrders(st, frame as unknown as Record<string, unknown>);
+        }),
+      ),
+      socket.on("fills", guard((f: FillsFrame) => this.onFills(st, f as unknown as Record<string, unknown>))),
     ];
     return () => {
       for (const off of offs) off();
