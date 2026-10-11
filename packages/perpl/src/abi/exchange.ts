@@ -1,0 +1,767 @@
+/* Minimal Perpl Exchange ABI (from PerplFoundation/dex-sdk Exchange.json + Errors.abi.json). See docs/research/perpl.md section 3. */
+export const exchangeAbi = [
+  {
+    "type": "function",
+    "name": "allowOrderForwarding",
+    "inputs": [
+      {
+        "name": "allow",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "createAccount",
+    "inputs": [
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "depositCollateral",
+    "inputs": [
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getAccountByAddr",
+    "inputs": [
+      {
+        "name": "accountAddress",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "accountInfo",
+        "type": "tuple",
+        "internalType": "struct AccountInfo",
+        "components": [
+          {
+            "name": "accountId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "balanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lockedBalanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "frozen",
+            "type": "uint8",
+            "internalType": "enum FreezeStatusEnum"
+          },
+          {
+            "name": "accountAddr",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "positions",
+            "type": "tuple",
+            "internalType": "struct PositionBitMap",
+            "components": [
+              {
+                "name": "bank1",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank2",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank3",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank4",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAccountById",
+    "inputs": [
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "accountInfo",
+        "type": "tuple",
+        "internalType": "struct AccountInfo",
+        "components": [
+          {
+            "name": "accountId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "balanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lockedBalanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "frozen",
+            "type": "uint8",
+            "internalType": "enum FreezeStatusEnum"
+          },
+          {
+            "name": "accountAddr",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "positions",
+            "type": "tuple",
+            "internalType": "struct PositionBitMap",
+            "components": [
+              {
+                "name": "bank1",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank2",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank3",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "bank4",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getExchangeInfo",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "balanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "protocolBalanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recycleBalanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "collateralDecimals",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "collateralToken",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "verifierProxy",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMinAccountOpenCNS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "minAccountOpenCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPerpetualInfoV2",
+    "inputs": [
+      {
+        "name": "perpId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "perpetualInfo",
+        "type": "tuple",
+        "internalType": "struct PerpetualInfoV2",
+        "components": [
+          {
+            "name": "name",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "priceDecimals",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lotDecimals",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "linkFeedId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "priceTolPer100K",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "marginTol",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "marginTolDecimals",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "refPriceMaxAgeSec",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "positionBalanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "insuranceBalanceCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "markPNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "markTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lastPNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lastTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "oraclePNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "oracleTimestampSec",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "longOpenInterestLNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "shortOpenInterestLNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "fundingStartBlock",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "fundingRatePct100k",
+            "type": "int16",
+            "internalType": "int16"
+          },
+          {
+            "name": "absFundingClampPctPer100K",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "status",
+            "type": "uint8",
+            "internalType": "enum PerpStatusEnum"
+          },
+          {
+            "name": "basePricePNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxBidPriceONS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minBidPriceONS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxAskPriceONS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minAskPriceONS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "numOrders",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "ignOracle",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "fundingSumScalingExp",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPositionV2",
+    "inputs": [
+      {
+        "name": "perpId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "positionInfo",
+        "type": "tuple",
+        "internalType": "struct PositionInfoV2",
+        "components": [
+          {
+            "name": "accountId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "nextNodeId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "prevNodeId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "positionType",
+            "type": "uint8",
+            "internalType": "enum PositionEnum"
+          },
+          {
+            "name": "depositCNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pricePNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "lotLNS",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "entryBlock",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pnlCNS",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "deltaPnlCNS",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "premiumPnlCNS",
+            "type": "int256",
+            "internalType": "int256"
+          },
+          {
+            "name": "priceResiduePNSQ16",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
+        ]
+      },
+      {
+        "name": "markPricePNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "markPriceValid",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "increasePositionCollateral",
+    "inputs": [
+      {
+        "name": "perpId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "isHalted",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "halted",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "withdrawCollateral",
+    "inputs": [
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AccountCreated",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "id",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CollateralDeposit",
+    "inputs": [
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "balanceCNS",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CollateralWithdrawal",
+    "inputs": [
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "balanceCNS",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "OrderForwardingUpdated",
+    "inputs": [
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "allowed",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AccountDoesNotExist",
+    "inputs": [
+      {
+        "name": "accountAddress",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AccountExists",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "accountId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AccountFrozen",
+    "inputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum FreezeStatusEnum"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AddressBlocked",
+    "inputs": [
+      {
+        "name": "addr",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AmountExceedsAvailableBalance",
+    "inputs": [
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "availableBalanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "balanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ExchangeHalted",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InsufficentAmountToOpenAccount",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFunds",
+    "inputs": [
+      {
+        "name": "balanceCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amountCNS",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "NotWhitelisted",
+    "inputs": [
+      {
+        "name": "addr",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  }
+] as const;

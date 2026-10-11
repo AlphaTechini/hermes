@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Set up · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<header class="ob-top">
+  <a class="brand" href="landing.html"><span data-mark></span>Hermes</a>
+  <span class="env-tag" style="margin-left:0">testnet</span>
+  <div class="right">
+    <span class="xs muted" data-step-label>Step 2 of 4</span>
+    <span class="vdiv"></span>
+    <span class="xs secondary hide-sm">ifeoma@example.com</span>
+    <a class="btn btn-ghost btn-sm" href="landing.html">Sign out</a>
+  </div>
+</header>
+
+<div class="ob">
+  <ol class="stepper" data-stepper aria-label="Setup steps">
+    <li data-n="1"><span class="dot"><span>1</span><svg data-i="check"></svg></span><div><div class="t">Wallet</div><div class="d">Created at sign in</div></div></li>
+    <li data-n="2"><span class="dot"><span>2</span><svg data-i="check"></svg></span><div><div class="t">Perpl account</div><div class="d">Approve and deposit</div></div></li>
+    <li data-n="3"><span class="dot"><span>3</span><svg data-i="check"></svg></span><div><div class="t">API key</div><div class="d">Trade only</div></div></li>
+    <li data-n="4"><span class="dot"><span>4</span><svg data-i="check"></svg></span><div><div class="t">First strategy</div><div class="d">Webhook for TradingView</div></div></li>
+  </ol>
+
+  <!-- STEP 1: Wallet -->
+  <section class="ob-card" data-step="1">
+    <div>
+      <h2>Your wallet is ready</h2>
+      <p class="lead">Privy created this wallet when you signed in. Hermes uses it to open your Perpl account and make deposits. It needs a little MON for gas and test AUSD to deposit.</p>
+    </div>
+    <div class="card">
+      <div class="card-body col g3">
+        <span class="label">Wallet address</span>
+        <div class="input mono-input input-lg">
+          <svg data-i="wallet"></svg>
+          <span class="val">0x7a3F9c21E0b84d6A5f1C3e7B92d40aF8c6E191c2</span>
+          <button class="btn btn-ghost btn-icon btn-sm" data-copy="0x7a3F9c21E0b84d6A5f1C3e7B92d40aF8c6E191c2" aria-label="Copy address"><svg data-i="copy"></svg></button>
+          <a class="btn btn-ghost btn-icon btn-sm" href="https://testnet.monadexplorer.com/address/0x7a3F9c21E0b84d6A5f1C3e7B92d40aF8c6E191c2" target="_blank" rel="noopener" aria-label="Open in explorer"><svg data-i="external-link"></svg></a>
+        </div>
+        <span class="hint">Monad testnet · chain 10143</span>
+      </div>
+      <hr class="divider">
+      <div class="bal">
+        <div><span class="l">MON for gas</span><span class="v">0.482<span class="u">MON</span></span><span class="xs pos row g1"><svg data-i="circle-check" class="i-12"></svg>Enough for setup</span></div>
+        <div><span class="l">Test AUSD</span><span class="v">1,000.00<span class="u">AUSD</span></span><span class="xs pos row g1"><svg data-i="circle-check" class="i-12"></svg>Ready to deposit</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><span class="card-title">Need test funds?</span><span class="card-meta">Free, testnet only</span></div>
+      <div class="checks">
+        <div class="chk skip"><svg data-i="droplet"></svg><div><div class="n" style="color:var(--text)">MON for gas</div><div class="d">Monad faucet. Rate limited.</div></div><a class="ext xs" href="https://faucet.monad.xyz" target="_blank" rel="noopener">faucet.monad.xyz<svg data-i="arrow-up-right"></svg></a></div>
+        <div class="chk skip"><svg data-i="coins"></svg><div><div class="n" style="color:var(--text)">Test AUSD</div><div class="d">Agora faucet. One request per minute, shared by everyone.</div></div><a class="ext xs" href="https://testnet.monadexplorer.com/address/0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C" target="_blank" rel="noopener">Agora faucet<svg data-i="arrow-up-right"></svg></a></div>
+      </div>
+    </div>
+    <div class="ob-foot"><span class="xs muted">Balances refresh every block.</span><a class="btn btn-primary btn-lg" href="onboarding.html?step=2">Continue<svg data-i="arrow-right"></svg></a></div>
+  </section>
+
+  <!-- STEP 2: Perpl account -->
+  <section class="ob-card" data-step="2" hidden>
+    <div>
+      <h2>Open your Perpl account</h2>
+      <p class="lead">Perpl trades from an exchange account funded with AUSD. Your wallet signs two transactions: one lets the exchange take the deposit, the other creates the account with it.</p>
+    </div>
+    <div class="field">
+      <label class="label" for="dep">First deposit</label>
+      <div class="input input-lg mono-input"><input id="dep" value="1,000.00"><span class="affix">AUSD</span><button class="btn btn-ghost btn-sm">Max</button></div>
+      <span class="hint">Minimum set by Perpl: <span class="mono">10 AUSD</span>. Wallet balance: <span class="mono">1,000.00 AUSD</span>.</span>
+    </div>
+    <div class="card">
+      <div class="tx-list">
+        <div class="tx" data-state="done">
+          <span class="ic"><svg data-i="check"></svg></span>
+          <div class="col"><span class="n">Approve AUSD</span><span class="m">Confirmed in block <span class="mono">41,820,114</span><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x3b9e" target="_blank" rel="noopener">0x3b9e…77a1<svg data-i="arrow-up-right"></svg></a></span></div>
+          <span class="pill positive">Confirmed</span>
+        </div>
+        <div class="tx" data-state="pending">
+          <span class="ic"><svg data-i="loader-circle"></svg></span>
+          <div class="col"><span class="n">Create account and deposit 1,000 AUSD</span><span class="m">Sent, waiting for a block<a class="ext mono" href="https://testnet.monadexplorer.com/tx/0xc41f" target="_blank" rel="noopener">0xc41f…2e90<svg data-i="arrow-up-right"></svg></a></span></div>
+          <span class="pill accent"><span class="hm-dot" data-tone="accent" data-live="true"></span>Pending</span>
+        </div>
+      </div>
+    </div>
+    <div class="callout">
+      <svg data-i="shield-check"></svg>
+      <div><b>This wallet can only interact with the Perpl exchange contract.</b> Privy refuses any other transaction before it is signed, so funds cannot be sent anywhere else. Contract <a class="ext mono" href="https://testnet.monadexplorer.com/address/0x1964c32f0be608e7d29302aff5e61268e72080cc" target="_blank" rel="noopener">0x1964…80cc<svg data-i="arrow-up-right"></svg></a></div>
+    </div>
+    <div class="ob-foot"><a class="btn btn-ghost" href="onboarding.html?step=1"><svg data-i="chevron-left"></svg>Back</a><button class="btn btn-primary btn-lg" disabled>Waiting for confirmation</button></div>
+  </section>
+
+  <!-- STEP 3: API key -->
+  <section class="ob-card" data-step="3" hidden>
+    <div>
+      <h2>Add a trade-only API key</h2>
+      <p class="lead">Hermes signs in to Perpl's trading socket with this key to place your orders.</p>
+    </div>
+    <div class="card"><div class="card-body">
+      <ol class="steps-list">
+        <li><span>Open <a class="ext" href="https://testnet.perpl.xyz/apikeys" target="_blank" rel="noopener">testnet.perpl.xyz/apikeys<svg data-i="arrow-up-right"></svg></a> and sign once with this wallet.</span></li>
+        <li><span>Choose the <b>Trade</b> scope. Add an expiry if you want one.</span></li>
+        <li><span>Copy the key ID and the private key, then paste them below.</span></li>
+      </ol>
+    </div></div>
+    <div class="col g4">
+      <div class="field">
+        <label class="label" for="kid">Key ID</label>
+        <div class="input input-lg mono-input"><input id="kid" value="ak_7Hc2Qm9Lx4"></div>
+      </div>
+      <div class="field">
+        <label class="label" for="kpk">Private key</label>
+        <div class="input input-lg mono-input is-focus"><svg data-i="key-round"></svg><input id="kpk" type="password" value="ed25519-private-key-value-here"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Show key"><svg data-i="eye"></svg></button></div>
+        <span class="hint">Stored encrypted on the Hermes server. Never shown again after you save.</span>
+      </div>
+    </div>
+    <div class="callout positive">
+      <svg data-i="shield-check"></svg>
+      <div><b>Trade-only keys can open and close positions. They can never withdraw or transfer funds.</b> Perpl enforces this, not Hermes.</div>
+    </div>
+    <div class="card">
+      <div class="tx-list"><div class="tx" data-state="done">
+        <span class="ic"><svg data-i="check"></svg></span>
+        <div class="col"><span class="n">Signed in to Perpl</span><span class="m">Account <span class="mono">#4821</span> · scope <span class="mono">trade</span> · expires <span class="mono">10 Jan 2027</span></span></div>
+        <span class="pill positive">Verified</span>
+      </div></div>
+    </div>
+    <div class="ob-foot"><a class="btn btn-ghost" href="onboarding.html?step=2"><svg data-i="chevron-left"></svg>Back</a><a class="btn btn-primary btn-lg" href="onboarding.html?step=4">Continue<svg data-i="arrow-right"></svg></a></div>
+  </section>
+
+  <!-- STEP 4: First strategy -->
+  <section class="ob-card" data-step="4" hidden>
+    <div>
+      <h2>Create your first strategy</h2>
+      <p class="lead">A strategy is one TradingView alert. Name it, then paste its webhook URL and message into the alert.</p>
+    </div>
+    <div class="form-grid">
+      <div class="field" style="grid-column:1/-1"><label class="label" for="sn">Name</label><div class="input input-lg"><input id="sn" value="Breakout 15m"></div></div>
+      <div class="field"><span class="label">Market</span><div class="input input-lg select"><span class="mkt" style="height:20px">BTC</span><span class="val">Bitcoin perpetual</span></div></div>
+      <div class="field"><span class="label">Leverage if the alert has none</span><div class="input input-lg mono-input"><input value="5"><span class="affix">x</span></div></div>
+    </div>
+    <div class="col g3">
+      <span class="label">Webhook URL</span>
+      <div class="input mono-input"><span class="val">https://hermes-relay.trycloudflare.com/v1/alerts/stg_8Kq2Zr</span><button class="btn btn-ghost btn-sm" data-copy="https://hermes-relay.trycloudflare.com/v1/alerts/stg_8Kq2Zr" data-label="1"><svg data-i="copy"></svg><span>Copy</span></button></div>
+      <span class="label" style="margin-top:4px">Message</span>
+      <div class="code">
+        <div class="code-head"><span class="n">TradingView message</span><span class="m">includes your secret</span><div class="actions"><button class="btn btn-secondary btn-sm" data-copy="{template}" data-label="1"><svg data-i="copy"></svg><span>Copy message</span></button></div></div>
+<pre data-json>
+{
+  "strategy": "stg_8Kq2Zr",
+  "secret": "••••••••••••hx2K",
+  "id": "{{strategy.order.id}}-{{timenow}}",
+  "market": "BTC",
+  "action": "{{strategy.order.action}}",
+  "size": "{{strategy.order.contracts}}",
+  "price": "{{close}}",
+  "time": "{{timenow}}"
+}</pre>
+      </div>
+    </div>
+    <div class="callout positive">
+      <svg data-i="circle-check"></svg>
+      <div><b>Test alert filled in 544 ms.</b> Long BTC 0.001 at <span class="mono">112,040.5</span>, <span class="mono">1.1 bps</span> from the alert price. <a class="link" href="alert.html">See every step</a></div>
+    </div>
+    <div class="ob-foot"><button class="btn btn-secondary btn-lg"><svg data-i="send"></svg>Send test alert</button><a class="btn btn-primary btn-lg" href="dashboard.html">Go to Live<svg data-i="arrow-right"></svg></a></div>
+  </section>
+</div>
+</body>
+</html>

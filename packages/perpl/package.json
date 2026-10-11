@@ -1,0 +1,38 @@
+{
+  "name": "@hermes/perpl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Perpl exchange integration for Hermes: signing, REST, trading + market-data WebSockets, rq/retry order tracker, chain helpers and a protocol simulator.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./sim": {
+      "types": "./src/sim/index.ts",
+      "default": "./src/sim/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "sim": "tsx src/sim/cli.ts"
+  },
+  "dependencies": {
+    "@hermes/shared": "workspace:*",
+    "viem": "2.57.4",
+    "ws": "8.22.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.2",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

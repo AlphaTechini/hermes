@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approvals · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="approvals"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <h1 class="page-title row g2">Approvals <span class="nav-count" style="margin:0">2</span></h1>
+          <p class="page-sub">Orders above your <span class="mono">$10,000</span> approval threshold wait here. Nothing is sent until you approve.</p>
+        </div>
+        <div class="page-actions">
+          <a class="btn btn-ghost" href="limits.html"><svg data-i="sliders-horizontal"></svg>Change threshold</a>
+        </div>
+      </div>
+
+      <!-- Pending 1 -->
+      <section class="card appr">
+        <div class="appr-head">
+          <div class="col g1">
+            <div class="appr-title"><span class="side short"><svg data-i="arrow-down-right"></svg>Short</span><span class="mkt">BTC</span><span class="mono">0.120</span></div>
+            <span class="xs muted">Breakout 15m · alert <a class="link mono" href="alert.html">A-10479</a> at <span class="mono">14:18:02</span></span>
+          </div>
+          <div class="countdown" data-countdown="102" data-total="120">
+            <span class="cd-row"><svg data-i="timer" class="i-14"></svg>Expires in <span class="cd-text">1:42</span></span>
+            <span class="meter" data-tone="accent"><i style="width:85%"></i></span>
+          </div>
+        </div>
+        <div class="appr-stats">
+          <div><span class="l">Notional</span><span class="v">$13,445.28</span><span class="s">$3,445 over threshold</span></div>
+          <div><span class="l">Alert price</span><span class="v">112,044.0</span><span class="s">from TradingView</span></div>
+          <div><span class="l">Mark now</span><span class="v">112,051.3</span><span class="s pos">0.7 bps better for a short</span></div>
+          <div><span class="l">Limit price</span><span class="v">111,707.9</span><span class="s">alert minus 30 bps</span></div>
+          <div><span class="l">Leverage</span><span class="v">5.0x</span><span class="s">max 10x</span></div>
+        </div>
+        <div class="appr-foot">
+          <span class="note"><svg data-i="circle-check" class="i-14 pos"></svg>Passed the other 5 checks. Approving asks Privy to confirm it is you.</span>
+          <button class="btn btn-secondary" data-toast="Rejected|Short BTC 0.120 was not sent.|warning|circle-x">Reject <span class="kbd-hint">R</span></button>
+          <button class="btn btn-primary" data-toast="Approved and sent|Short BTC 0.120 is on its way to Perpl.|positive|circle-check"><svg data-i="check"></svg>Approve and send <span class="kbd-hint">A</span></button>
+        </div>
+      </section>
+
+      <!-- Pending 2 -->
+      <section class="card appr">
+        <div class="appr-head">
+          <div class="col g1">
+            <div class="appr-title"><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span><span class="mkt">SOL</span><span class="mono">70.0</span></div>
+            <span class="xs muted">SOL momentum 5m · alert <span class="mono secondary">A-10484</span> at <span class="mono">14:31:41</span></span>
+          </div>
+          <div class="countdown" data-countdown="38" data-total="120" data-urgent>
+            <span class="cd-row"><svg data-i="timer" class="i-14"></svg>Expires in <span class="cd-text">0:38</span></span>
+            <span class="meter" data-tone="warning"><i style="width:31.7%"></i></span>
+          </div>
+        </div>
+        <div class="appr-stats">
+          <div><span class="l">Notional</span><span class="v">$14,727.44</span><span class="s">$4,727 over threshold</span></div>
+          <div><span class="l">Alert price</span><span class="v">210.180</span><span class="s">from TradingView</span></div>
+          <div><span class="l">Mark now</span><span class="v">210.392</span><span class="s warn">10.1 bps worse than alert</span></div>
+          <div><span class="l">Limit price</span><span class="v">210.811</span><span class="s">alert plus 30 bps</span></div>
+          <div><span class="l">Leverage</span><span class="v">4.0x</span><span class="s">max 10x</span></div>
+        </div>
+        <div class="appr-foot">
+          <span class="note"><svg data-i="circle-check" class="i-14 pos"></svg>Passed the other 5 checks. Price has moved since the alert.</span>
+          <button class="btn btn-secondary">Reject <span class="kbd-hint">R</span></button>
+          <button class="btn btn-primary"><svg data-i="check"></svg>Approve and send <span class="kbd-hint">A</span></button>
+        </div>
+      </section>
+
+      <!-- History -->
+      <section class="card">
+        <div class="card-head"><span class="card-title">Decided</span><span class="card-meta">Last 7 days</span></div>
+        <div class="table-wrap">
+          <table class="t">
+            <thead><tr><th>Asked</th><th>Order</th><th class="hide-sm">Strategy</th><th class="num hide-sm">Notional</th><th>Decision</th><th>Result</th></tr></thead>
+            <tbody>
+              <tr><td class="mono secondary">13:12:40</td><td><span class="row g2"><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span><span class="mkt">BTC</span><span class="mono xs">0.100</span></span></td><td class="secondary hide-sm">Breakout 15m</td><td class="num hide-sm">$11,190.40</td><td><span class="pill positive"><svg data-i="check"></svg>Approved</span> <span class="xs muted mono">in 0:21</span></td><td class="xs secondary">Filled · <span class="mono">1.9 bps</span></td></tr>
+              <tr><td class="mono secondary">11:48:03</td><td><span class="row g2"><span class="side short"><svg data-i="arrow-down-right"></svg>Short</span><span class="mkt">ETH</span><span class="mono xs">3.00</span></span></td><td class="secondary hide-sm">ETH mean reversion 1h</td><td class="num hide-sm">$12,306.30</td><td><span class="pill"><svg data-i="hourglass"></svg>Expired</span> <span class="xs muted mono">after 2:00</span></td><td class="xs muted">Not sent</td></tr>
+              <tr><td class="mono secondary">10 Oct 22:31</td><td><span class="row g2"><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span><span class="mkt">MON</span><span class="mono xs">300,000</span></span></td><td class="secondary hide-sm">MON trend 1h</td><td class="num hide-sm">$12,021.00</td><td><span class="pill positive"><svg data-i="check"></svg>Approved</span> <span class="xs muted mono">in 0:48</span></td><td class="xs secondary">Filled · <span class="mono">6.2 bps</span></td></tr>
+              <tr><td class="mono secondary">10 Oct 19:05</td><td><span class="row g2"><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span><span class="mkt">BTC</span><span class="mono xs">0.090</span></span></td><td class="secondary hide-sm">Breakout 15m</td><td class="num hide-sm">$10,060.20</td><td><span class="pill negative"><svg data-i="x"></svg>Rejected</span></td><td class="xs muted">Not sent</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+</body>
+</html>

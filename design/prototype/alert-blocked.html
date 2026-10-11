@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alert A-10480 · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="live"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <nav class="crumbs" aria-label="Breadcrumb"><a href="dashboard.html">Live</a><svg data-i="chevron-right"></svg><span class="mono">A-10480</span></nav>
+          <div class="row g3 wrap">
+            <h1 class="page-title row g2"><span class="side long" style="font-size:inherit"><svg data-i="arrow-up-right" style="width:20px;height:20px"></svg>Long</span> SOL <span class="mono w500" style="font-size:18px">140.0</span></h1>
+            <span class="pill warning"><svg data-i="octagon-x"></svg>Blocked</span>
+          </div>
+          <p class="page-sub">SOL momentum 5m · received <span class="mono">14:21:33.250</span> WAT, 11 Oct 2026 · alert id <span class="mono">solm5-1760188893</span></p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost btn-sm" data-copy="A-10480" data-label="1"><svg data-i="copy"></svg><span>Copy ID</span></button>
+          <a class="btn btn-secondary btn-sm" href="limits.html"><svg data-i="sliders-horizontal"></svg>Review limit</a>
+        </div>
+      </div>
+
+      <div class="callout warning">
+        <svg data-i="octagon-x"></svg>
+        <div><b>Blocked by your max position size.</b> This order would have taken your SOL position to <span class="mono fg">$29,458</span>. Your limit is <span class="mono fg">$25,000</span> per market. Nothing was sent to Perpl. To allow orders like this, raise the limit or lower <span class="mono">size</span> in the TradingView message.</div>
+      </div>
+
+      <section class="kpis" aria-label="Alert summary">
+        <div class="kpi"><div class="kpi-label">Alert price</div><div class="kpi-value mono" style="font-size:22px">210.412</div><div class="kpi-sub">From TradingView, BINANCE:SOLUSDT 5m</div></div>
+        <div class="kpi"><div class="kpi-label">Fill price</div><div class="kpi-value muted" style="font-size:22px">Not sent</div><div class="kpi-sub">No order, no fee</div></div>
+        <div class="kpi"><div class="kpi-label">Order notional</div><div class="kpi-value">$29,458</div><div class="kpi-sub warn"><svg data-i="arrow-up"></svg><span class="d">$4,458</span> over the limit</div></div>
+        <div class="kpi"><div class="kpi-label">Time to decision</div><div class="kpi-value">5<span class="u">ms</span></div><div class="kpi-sub">Received to blocked</div></div>
+      </section>
+
+      <div class="grid-12" style="align-items:start">
+        <div class="span-8 col g4">
+          <section class="card">
+            <div class="card-head"><span class="card-title">Lifecycle</span><span class="card-meta">Stopped at stage 3 of 6</span></div>
+            <div class="card-body" style="padding-bottom:12px" id="pipe-lg"></div>
+            <hr class="divider">
+            <div class="tl">
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:21:33.250</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Received</div><div class="tl-desc">POST from TradingView <span class="mono">52.89.214.238</span> to <span class="mono">/v1/alerts/stg_Sm5x9W</span></div><span class="tl-time-m">14:21:33.250</span></div>
+                <span class="tl-delta">0 ms</span><span class="tl-gantt"><b style="left:0;width:2px"></b></span>
+              </div>
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:21:33.254</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Verified</div><div class="tl-desc">Secret matches. Alert id is new. Message has every required field.</div><span class="tl-time-m">14:21:33.254</span></div>
+                <span class="tl-delta">+4 ms</span><span class="tl-gantt"><b style="left:0;width:80%"></b></span>
+              </div>
+              <div class="tl-row" data-state="blocked">
+                <span class="tl-time">14:21:33.255</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title warn">Blocked by risk checks</div><div class="tl-desc">Max position size failed. 5 other checks passed.</div><span class="tl-time-m">14:21:33.255</span></div>
+                <span class="tl-delta warn">+1 ms</span><span class="tl-gantt"><b style="left:80%;width:20%;background:var(--warning)"></b></span>
+              </div>
+              <div class="tl-row" data-state="skipped">
+                <span class="tl-time faint">n/a</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Sent, accepted, filled</div><div class="tl-desc">Skipped. Hermes does not send orders that fail a check.</div></div>
+                <span class="tl-delta faint">n/a</span><span class="tl-gantt"></span>
+              </div>
+            </div>
+            <div class="tl-gantt-axis"><span></span><span></span><span></span><span></span><span class="ax"><span>0</span><span>5 ms</span></span></div>
+          </section>
+
+          <section class="code">
+            <div class="code-head"><span class="n">Raw payload</span><span class="m">from TradingView</span>
+              <div class="actions"><button class="btn btn-ghost btn-icon btn-sm" data-copy='{"strategy":"stg_Sm5x9W"}' aria-label="Copy payload"><svg data-i="copy"></svg></button></div></div>
+<pre data-json>
+{
+  "strategy": "stg_Sm5x9W",
+  "secret": "••••••••",
+  "id": "solm5-1760188893",
+  "market": "SOL",
+  "action": "buy",
+  "size": "140",
+  "price": "210.412",
+  "leverage": 4,
+  "time": "2026-10-11T13:21:33Z"
+}</pre>
+          </section>
+        </div>
+
+        <div class="span-4 col g4">
+          <section class="card">
+            <div class="card-head"><span class="card-title">Risk checks</span><span class="card-meta"><span class="warn">1 failed</span> · 5 passed</span></div>
+            <div class="checks">
+              <div class="chk fail"><svg data-i="octagon-x"></svg><div><div class="n">Max position size</div><div class="d">Position after this order</div></div><span class="v warn">$29,458 / $25,000</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Strategy enabled</div><div class="d">SOL momentum 5m</div></div><span class="v">On</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Market allowed</div><div class="d">SOL is on your list</div></div><span class="v">SOL</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Max leverage</div><div class="d">Requested by the alert</div></div><span class="v">4.0x / 10x</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Daily loss stop</div><div class="d">Loss so far today</div></div><span class="v">$137 / $500</span></div>
+              <div class="chk skip"><svg data-i="circle-dot"></svg><div><div class="n">Approval threshold</div><div class="d">Not reached, order already blocked</div></div><span class="v muted">n/a</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-head"><span class="card-title">Onchain</span><span class="card-meta">Monad testnet</span></div>
+            <div class="empty" style="padding:28px 20px">
+              <div class="empty-icon"><svg data-i="ban"></svg></div>
+              <p>No transaction. Blocked alerts never reach Perpl, so there is nothing onchain.</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+document.getElementById('pipe-lg').innerHTML = hermesPipe(
+  [['done','0 ms'],['done','+4 ms'],['blocked','+1 ms'],['skipped',''],['skipped',''],['skipped','']], 'lg', true);
+</script>
+</body>
+</html>

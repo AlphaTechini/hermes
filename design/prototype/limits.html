@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk limits · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="limits"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <h1 class="page-title">Risk limits</h1>
+          <p class="page-sub">Hermes checks every alert against these before anything reaches Perpl. They apply to all strategies.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-danger"><svg data-i="circle-pause"></svg>Pause trading</button>
+        </div>
+      </div>
+
+      <section class="kpis" aria-label="Limits today">
+        <div class="kpi"><div class="kpi-label">Alerts checked today</div><div class="kpi-value">47</div><div class="kpi-sub">43 passed · 4 stopped</div></div>
+        <div class="kpi"><div class="kpi-label">Blocked by a limit</div><div class="kpi-value">3</div><div class="kpi-sub">Size 2 · Market 1</div></div>
+        <div class="kpi"><div class="kpi-label">Daily loss used</div><div class="kpi-value">27.4<span class="u">%</span></div><div class="kpi-sub"><span class="d secondary">$137.20</span> of <span class="d secondary">$500</span></div></div>
+        <div class="kpi"><div class="kpi-label">Waiting for approval</div><div class="kpi-value">2</div><div class="kpi-sub"><a class="link" href="approvals.html">Open approvals</a></div></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="card-title">Limits</span><span class="card-meta">Last changed 9 Oct, 21:14</span></div>
+
+        <!-- Allowed markets -->
+        <div class="set-row">
+          <div class="lbl"><h3>Allowed markets</h3><p>Alerts for any other market are blocked. Turning a market off does not close open positions.</p></div>
+          <div class="wide col g3">
+            <div class="mkt-tiles" role="group" aria-label="Allowed markets">
+              <div class="mkt-tile" role="checkbox" aria-checked="true" tabindex="0"><div class="top"><span class="tk">BTC</span><span class="box"><svg data-i="check"></svg></span></div><span class="px">112,051.3</span><span class="ex">Open $7,844</span></div>
+              <div class="mkt-tile" role="checkbox" aria-checked="true" tabindex="0"><div class="top"><span class="tk">ETH</span><span class="box"><svg data-i="check"></svg></span></div><span class="px">4,104.10</span><span class="ex">Open $4,925</span></div>
+              <div class="mkt-tile" role="checkbox" aria-checked="true" tabindex="0"><div class="top"><span class="tk">SOL</span><span class="box"><svg data-i="check"></svg></span></div><span class="px">210.392</span><span class="ex">No position</span></div>
+              <div class="mkt-tile" role="checkbox" aria-checked="true" tabindex="0"><div class="top"><span class="tk">MON</span><span class="box"><svg data-i="check"></svg></span></div><span class="px">0.040265</span><span class="ex">Open $6,040</span></div>
+              <div class="mkt-tile" role="checkbox" aria-checked="false" tabindex="0"><div class="top"><span class="tk secondary">ZEC</span><span class="box"><svg data-i="check"></svg></span></div><span class="px muted">287.40</span><span class="ex warn">1 alert blocked today</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Max position size -->
+        <div class="set-row">
+          <div class="lbl"><h3>Max position size</h3><p>Largest position Hermes may hold in one market, in USD notional, after the order fills.</p></div>
+          <div class="field">
+            <div class="input mono-input"><span class="affix">$</span><input value="25,000" aria-label="Max position size in USD"><span class="affix">per market</span></div>
+            <span class="hint">2 alerts blocked by this today.</span>
+          </div>
+          <div class="usage">
+            <div class="head"><span>Now, per market</span><span>Largest <span class="v">31.4%</span></span></div>
+            <div class="bars">
+              <div class="bar-row"><span class="mkt">BTC</span><span class="meter"><i style="width:31.4%"></i></span><span class="v">$7,844 / $25,000</span></div>
+              <div class="bar-row"><span class="mkt">MON</span><span class="meter"><i style="width:24.2%"></i></span><span class="v">$6,040 / $25,000</span></div>
+              <div class="bar-row"><span class="mkt">ETH</span><span class="meter"><i style="width:19.7%"></i></span><span class="v">$4,925 / $25,000</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Max leverage -->
+        <div class="set-row">
+          <div class="lbl"><h3>Max leverage</h3><p>Alerts asking for more are blocked, not reduced. Perpl's own market maximum still applies.</p></div>
+          <div class="field">
+            <div class="input mono-input"><input value="10" aria-label="Max leverage"><span class="affix">x</span></div>
+            <div class="lev-scale" aria-hidden="true">
+              <span class="track"></span><span class="fill" style="width:47.4%"></span><span class="knob" style="left:47.4%"></span>
+              <span class="ticks"><span style="left:0;transform:none">1x</span><span style="left:21%">5x</span><span style="left:47.4%">10x</span><span style="left:100%;transform:translateX(-100%)">20x</span></span>
+            </div>
+          </div>
+          <div class="usage">
+            <div class="head"><span>Highest open position</span><span class="v">5.0x <span class="muted">/ 10x</span></span></div>
+            <div class="meter"><i style="width:50%"></i></div>
+            <span class="xs muted">BTC and ETH at 5.0x, MON at 3.0x.</span>
+          </div>
+        </div>
+
+        <!-- Daily loss stop -->
+        <div class="set-row">
+          <div class="lbl"><h3 class="row g2">Daily loss stop <span class="changed-dot" title="Unsaved change"></span></h3><p>Once today's realized and unrealized loss reaches this, Hermes blocks new orders until 00:00 UTC. Orders that close a position still go through.</p></div>
+          <div class="field">
+            <div class="input mono-input is-focus"><span class="affix">$</span><input value="500" aria-label="Daily loss stop in USD"><span class="affix">per day</span></div>
+            <span class="hint">Was <span class="mono">$400</span>. Saved changes apply to the next alert.</span>
+          </div>
+          <div class="usage">
+            <div class="head"><span>Used today</span><span class="v">$137.20 <span class="muted">/ $500</span></span></div>
+            <div class="meter meter-lg"><i style="width:27.4%"></i><span class="tick" style="left:80%" title="Warning at 80%"></span></div>
+            <span class="xs muted">Resets in <span class="mono secondary">9h 27m</span>. You get a warning at 80%.</span>
+          </div>
+        </div>
+
+        <!-- Approval threshold -->
+        <div class="set-row">
+          <div class="lbl"><h3>Approval threshold</h3><p>Orders above this notional wait for you in Approvals. If you do nothing, they expire and are not sent.</p></div>
+          <div class="field">
+            <div class="input mono-input"><span class="affix">$</span><input value="10,000" aria-label="Approval threshold in USD"><span class="affix">notional</span></div>
+            <div class="row g2"><span class="hint">Expire after</span><div class="input select mono-input" style="height:28px;width:112px"><span class="val">2 min</span></div></div>
+          </div>
+          <div class="usage">
+            <div class="head"><span>Last 7 days</span><span class="v">8 asked</span></div>
+            <div class="row g4 xs secondary wrap"><span><span class="mono fg">2</span> waiting now</span><span><span class="mono fg">5</span> approved</span><span><span class="mono fg">1</span> expired</span><span><span class="mono fg">0</span> rejected</span></div>
+            <a class="link xs" href="approvals.html">Review the 2 waiting</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><span class="card-title row g2"><svg data-i="shield-check" class="i-14"></svg>Wallet policy</span><span class="card-meta">Enforced by Privy on every transaction your wallet signs</span></div>
+        <div class="checks">
+          <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Only the Perpl exchange contract</div><div class="d">Any transaction to another address is refused before signing.</div></div><a class="ext mono xs" href="https://testnet.monadexplorer.com/address/0x1964c32f0be608e7d29302aff5e61268e72080cc" target="_blank" rel="noopener">0x1964…80cc<svg data-i="arrow-up-right"></svg></a></div>
+          <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">AUSD approvals to the exchange only</div><div class="d">Token approvals to any other spender are refused.</div></div><span class="v">AUSD</span></div>
+          <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Deposit cap</div><div class="d">Per transaction.</div></div><span class="v">1,000 AUSD</span></div>
+          <div class="chk skip"><svg data-i="history"></svg><div><div class="n" style="color:var(--text-secondary)">Last refusal</div><div class="d">9 Oct, 18:02 · transfer to <span class="mono">0x52a1…0f3e</span> refused by policy</div></div><span class="v muted">1 in 7 days</span></div>
+        </div>
+      </section>
+
+      <div class="savebar" role="region" aria-label="Unsaved changes">
+        <span class="changed-dot"></span>
+        <span class="grow">1 unsaved change · Daily loss stop <span class="mono">$400</span> to <span class="mono fg">$500</span></span>
+        <button class="btn btn-ghost btn-sm">Discard</button>
+        <button class="btn btn-primary btn-sm" data-toast="Limits saved|They apply from the next alert.|positive|circle-check">Save changes</button>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

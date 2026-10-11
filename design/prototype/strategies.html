@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strategies · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="strategies"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <h1 class="page-title">Strategies</h1>
+          <p class="page-sub">One strategy per TradingView alert. Each has its own webhook URL and secret.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary"><svg data-i="plus"></svg>New strategy</button>
+        </div>
+      </div>
+
+      <div class="md-layout">
+        <!-- List -->
+        <section class="card">
+          <div class="card-head">
+            <span class="card-title">All strategies <span class="tag mono">5</span></span>
+            <span class="card-meta">4 on</span>
+          </div>
+          <div>
+            <a class="list-item" aria-current="true" href="#">
+              <span class="mkt">BTC</span>
+              <span class="col grow g1">
+                <span class="row between g2"><span class="w500 truncate">Breakout 15m</span><label class="toggle" onclick="event.stopPropagation()"><input type="checkbox" checked aria-label="Breakout 15m enabled"><span class="track"></span></label></span>
+                <span class="xs muted row g2"><span class="hm-dot" data-tone="positive"></span>Last alert 12s ago</span>
+                <span class="xs secondary"><span class="mono">18</span> today · <span class="mono">94.4%</span> filled</span>
+              </span>
+            </a>
+            <a class="list-item" href="#">
+              <span class="mkt">ETH</span>
+              <span class="col grow g1">
+                <span class="row between g2"><span class="w500 truncate">ETH mean reversion 1h</span><label class="toggle"><input type="checkbox" checked aria-label="ETH mean reversion 1h enabled"><span class="track"></span></label></span>
+                <span class="xs muted row g2"><span class="hm-dot" data-tone="positive"></span>Last alert 2m ago</span>
+                <span class="xs secondary"><span class="mono">6</span> today · <span class="mono">100%</span> filled</span>
+              </span>
+            </a>
+            <a class="list-item" href="#">
+              <span class="mkt">SOL</span>
+              <span class="col grow g1">
+                <span class="row between g2"><span class="w500 truncate">SOL momentum 5m</span><label class="toggle"><input type="checkbox" checked aria-label="SOL momentum 5m enabled"><span class="track"></span></label></span>
+                <span class="xs muted row g2"><span class="hm-dot" data-tone="positive"></span>Last alert 11m ago</span>
+                <span class="xs secondary"><span class="mono">14</span> today · <span class="mono">85.7%</span> filled · <span class="warn">1 blocked</span></span>
+              </span>
+            </a>
+            <a class="list-item" href="#">
+              <span class="mkt">MON</span>
+              <span class="col grow g1">
+                <span class="row between g2"><span class="w500 truncate">MON trend 1h</span><label class="toggle"><input type="checkbox" checked aria-label="MON trend 1h enabled"><span class="track"></span></label></span>
+                <span class="xs muted row g2"><span class="hm-dot" data-tone="positive"></span>Last alert 27m ago</span>
+                <span class="xs secondary"><span class="mono">5</span> today · <span class="mono">100%</span> filled</span>
+              </span>
+            </a>
+            <a class="list-item" href="#">
+              <span class="mkt" style="color:var(--text-muted)">ZEC</span>
+              <span class="col grow g1">
+                <span class="row between g2"><span class="w500 truncate secondary">ZEC breakout 4h</span><label class="toggle"><input type="checkbox" aria-label="ZEC breakout 4h enabled"><span class="track"></span></label></span>
+                <span class="xs muted row g2"><span class="hm-dot"></span>Off</span>
+                <span class="xs warn row g1"><svg data-i="triangle-alert" class="i-12"></svg>ZEC is not in your allowed markets</span>
+              </span>
+            </a>
+          </div>
+        </section>
+
+        <!-- Detail -->
+        <div class="col g4" style="min-width:0">
+          <section class="card">
+            <div class="card-body row between wrap g4">
+              <div class="col g1" style="min-width:0">
+                <div class="row g3 wrap"><h2 style="font-size:16px;line-height:24px">Breakout 15m</h2><span class="mkt">BTC</span><span class="tag mono">stg_8Kq2Zr</span></div>
+                <span class="xs muted">Created 3 Oct 2026 · 152 alerts in the last 7 days</span>
+              </div>
+              <div class="row g2">
+                <label class="toggle"><span>Enabled</span><input type="checkbox" checked><span class="track"></span></label>
+                <span class="vdiv"></span>
+                <button class="btn btn-secondary btn-sm" data-toast="Test alert sent|Long BTC 0.001 posted to your webhook. Watch it on Live.|accent|send"><svg data-i="send"></svg>Send test alert</button>
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="More"><svg data-i="ellipsis"></svg></button>
+              </div>
+            </div>
+            <hr class="divider">
+            <div class="kpis" style="border:0;border-radius:0 0 8px 8px">
+              <div class="kpi"><div class="kpi-label">Fill rate, 7d</div><div class="kpi-value" style="font-size:20px;line-height:28px">91.2<span class="u">%</span></div></div>
+              <div class="kpi"><div class="kpi-label">Median alert to fill</div><div class="kpi-value" style="font-size:20px;line-height:28px">486<span class="u">ms</span></div></div>
+              <div class="kpi"><div class="kpi-label">Median slippage</div><div class="kpi-value" style="font-size:20px;line-height:28px">4.1<span class="u">bps</span></div></div>
+              <div class="kpi"><div class="kpi-label">Grade</div><div class="kpi-value row g2" style="font-size:20px;line-height:28px">B <a class="link xs w500" href="report.html" style="letter-spacing:0">Report card</a></div></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">Connect TradingView</span><span class="card-meta">3 fields to paste into your alert</span></div>
+            <div class="card-body">
+              <div class="section-num">
+                <span class="n">1</span>
+                <div class="body">
+                  <h3>Webhook URL</h3>
+                  <div class="input mono-input">
+                    <span class="val">https://hermes-relay.trycloudflare.com/v1/alerts/stg_8Kq2Zr</span>
+                    <button class="btn btn-ghost btn-sm" data-copy="https://hermes-relay.trycloudflare.com/v1/alerts/stg_8Kq2Zr" data-label="1"><svg data-i="copy"></svg><span>Copy</span></button>
+                  </div>
+                  <p class="hint">In the alert's Notifications tab, turn on Webhook URL and paste this. Webhooks need a paid TradingView plan with two-factor authentication.</p>
+                </div>
+              </div>
+              <div class="section-num">
+                <span class="n">2</span>
+                <div class="body">
+                  <h3>Secret</h3>
+                  <div class="row g2">
+                    <div class="input mono-input grow">
+                      <svg data-i="lock-keyhole"></svg>
+                      <span class="val" id="secret" data-masked="••••••••••••••••••••hx2K" data-secret="whsec_9fT2mQ7vLc4Rk8Zp1Xn6hx2K">••••••••••••••••••••hx2K</span>
+                      <button class="btn btn-ghost btn-icon btn-sm" data-reveal="secret" aria-label="Show secret"><svg data-i="eye"></svg></button>
+                      <button class="btn btn-ghost btn-icon btn-sm" data-copy="whsec_9fT2mQ7vLc4Rk8Zp1Xn6hx2K" aria-label="Copy secret"><svg data-i="copy"></svg></button>
+                    </div>
+                    <button class="btn btn-secondary"><svg data-i="refresh-cw"></svg>Rotate</button>
+                  </div>
+                  <p class="hint">It goes inside the message below. Hermes ignores any alert without it. Rotating stops alerts that still use the old secret.</p>
+                </div>
+              </div>
+              <div class="section-num">
+                <span class="n">3</span>
+                <div class="body">
+                  <h3>Message</h3>
+                  <div class="code">
+                    <div class="code-head">
+                      <div class="seg" style="height:28px" role="group" aria-label="Alert type"><button aria-pressed="true" style="height:22px">Strategy alert</button><button style="height:22px">Indicator alert</button></div>
+                      <div class="actions"><button class="btn btn-secondary btn-sm" data-copy="{template}" data-label="1"><svg data-i="copy"></svg><span>Copy message</span></button></div>
+                    </div>
+<pre data-json>
+{
+  "strategy": "stg_8Kq2Zr",
+  "secret": "••••••••••••hx2K",
+  "id": "{{strategy.order.id}}-{{timenow}}",
+  "market": "BTC",
+  "action": "{{strategy.order.action}}",
+  "size": "{{strategy.order.contracts}}",
+  "price": "{{close}}",
+  "leverage": 5,
+  "time": "{{timenow}}"
+}</pre>
+                  </div>
+                  <p class="hint">The copied message includes your real secret. Values in <span class="mono acc">{{ }}</span> are filled in by TradingView when the alert fires. <span class="mono">id</span> must be unique per alert so Hermes can drop repeats.</p>
+                </div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <span class="row g2"><svg data-i="circle-check" class="i-14 pos"></svg>Last test <span class="mono secondary">14:02:11</span> filled in <span class="mono secondary">544 ms</span> · <a class="link mono" href="alert.html">A-10466</a></span>
+              <label class="check xs secondary"><input type="checkbox">Dry run: stop after risk checks</label>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">Order settings</span><span class="card-meta">Applied to every alert from this strategy</span><div class="actions"><button class="btn btn-ghost btn-sm" disabled>Save</button></div></div>
+            <div class="card-body form-grid">
+              <div class="field">
+                <span class="label">Order type</span>
+                <div class="input select"><span class="val">Limit, immediate or cancel</span></div>
+                <span class="hint">Fills now at the limit price or better, cancels the rest.</span>
+              </div>
+              <div class="field">
+                <span class="label">Max slippage</span>
+                <div class="input mono-input"><input value="30" aria-label="Max slippage in bps"><span class="affix">bps</span></div>
+                <span class="hint">Limit price = alert price + 30 bps for buys, minus for sells.</span>
+              </div>
+              <div class="field">
+                <span class="label">Size</span>
+                <div class="seg" role="group"><button aria-pressed="true">From alert</button><button>Fixed USD</button></div>
+                <span class="hint">Uses <span class="mono">size</span> from the message, in BTC.</span>
+              </div>
+              <div class="field">
+                <span class="label">Leverage if the alert has none</span>
+                <div class="input mono-input"><input value="5" aria-label="Default leverage"><span class="affix">x</span></div>
+                <span class="hint">Your risk limit caps this at 10x.</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes · TradingView alerts to Perpl orders</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body class="lp">
+<nav class="lp-nav" aria-label="Main">
+  <a class="brand" href="landing.html"><span data-mark></span>Hermes</a>
+  <div class="links"><a href="#how">How it works</a><a href="#measure">Report card</a><a href="#safety">Safety</a></div>
+  <div class="right">
+    <button class="btn btn-ghost btn-icon btn-sm" data-theme-toggle aria-label="Switch theme"><svg data-i="sun"></svg></button>
+    <a class="btn btn-secondary btn-sm" href="onboarding.html?step=1">Sign in</a>
+  </div>
+</nav>
+
+<div class="lp-hero-wrap">
+<header class="lp-hero">
+  <div>
+    <span class="eyebrow"><span class="hm-dot" data-tone="positive"></span>Live on Perpl, Monad testnet</span>
+    <h1 class="lp-h1">TradingView alerts, filled on Perpl in under a second.</h1>
+    <p class="lp-sub">Hermes places each order inside limits you set, then shows how the live fills compare with the chart.</p>
+    <div class="lp-cta">
+      <a class="btn btn-primary btn-lg" href="onboarding.html?step=1"><svg data-i="mail"></svg>Sign in with email</a>
+      <a class="btn btn-ghost btn-lg" href="#how">How it works<svg data-i="arrow-right"></svg></a>
+    </div>
+    <div class="lp-proof">
+      <span><svg data-i="key-round"></svg>Trade-only keys, no withdrawals</span>
+      <span><svg data-i="shield"></svg>Hard limits on every order</span>
+      <span><svg data-i="flask-conical"></svg>Testnet funds only</span>
+    </div>
+  </div>
+
+  <!-- Signature visual: one alert relayed end to end -->
+  <div class="relay-stack"><div class="relay" aria-label="An alert from TradingView becoming a Perpl fill">
+    <div class="relay-head"><span class="hm-dot" data-tone="positive" data-live="true"></span><span>Alert <span class="mono secondary">A-10482</span></span><span class="faint">·</span><span>Breakout 15m</span><span style="margin-left:auto" class="mono">14:32:07.412</span></div>
+    <div class="relay-sec">
+      <div class="relay-lbl"><svg data-i="bell" class="i-12"></svg>TradingView sends<span class="k">POST /v1/alerts/stg_8Kq2Zr</span></div>
+      <div class="code"><pre data-json>
+{ "market": "BTC", "action": "buy", "size": "0.050", "price": "112031.0" }</pre></div>
+    </div>
+    <div class="relay-sec">
+      <div class="relay-lbl"><svg data-i="zap" class="i-12"></svg>Hermes relays</div>
+      <div class="hm-pipe" data-size="lg" data-demo-pipe>
+        <div class="hm-pipe__stage" data-state="done"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Received</span><span class="hm-pipe__ms">0 ms</span></div>
+        <div class="hm-pipe__stage" data-state="done"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Verified</span><span class="hm-pipe__ms">+4 ms</span></div>
+        <div class="hm-pipe__stage" data-state="done"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Checked</span><span class="hm-pipe__ms">+2 ms</span></div>
+        <div class="hm-pipe__stage" data-state="done"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Sent</span><span class="hm-pipe__ms">+11 ms</span></div>
+        <div class="hm-pipe__stage" data-state="done"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Accepted</span><span class="hm-pipe__ms">+184 ms</span></div>
+        <div class="hm-pipe__stage" data-state="final"><span class="hm-pipe__seg"></span><span class="hm-pipe__label">Filled</span><span class="hm-pipe__ms">+411 ms</span></div>
+      </div>
+    </div>
+    <div class="relay-sec">
+      <div class="relay-lbl"><svg data-i="circle-check" class="i-12 pos"></svg>Perpl fills<a class="ext mono" style="margin-left:auto" href="https://testnet.monadexplorer.com/tx/0x8f3a" target="_blank" rel="noopener">0x8f3a…e21c<svg data-i="arrow-up-right"></svg></a></div>
+      <div class="relay-result" data-demo-result>
+        <div><div class="l">Alert price</div><div class="v">112,031.0</div></div>
+        <div><div class="l">Fill price</div><div class="v">112,048.5</div></div>
+        <div><div class="l">Slippage</div><div class="v">1.6 bps</div></div>
+        <div><div class="l">Alert to fill</div><div class="v">612 ms</div></div>
+      </div>
+    </div>
+  </div></div>
+</header>
+</div>
+
+<section class="lp-section" id="how">
+  <h2>Set up once. Every alert after that trades itself.</h2>
+  <p class="intro">No bot to write and no server to run. You keep your strategy in TradingView.</p>
+  <div class="lp-cols">
+    <div class="feat"><span class="ic"><svg data-i="wallet"></svg></span><span class="num">01</span><h3>Connect Perpl</h3><p>Sign in with email and get a wallet. Open your Perpl account and add a trade-only API key.</p></div>
+    <div class="feat"><span class="ic"><svg data-i="sliders-horizontal"></svg></span><span class="num">02</span><h3>Set your limits</h3><p>Pick allowed markets, max position size, max leverage, a daily loss stop and a size that needs your approval.</p></div>
+    <div class="feat"><span class="ic"><svg data-i="webhook"></svg></span><span class="num">03</span><h3>Paste the webhook</h3><p>Copy your Hermes URL and message into a TradingView alert. Send a test alert to see it fill.</p></div>
+  </div>
+</section>
+
+<section class="lp-section" id="measure">
+  <div class="lp-split">
+    <div>
+      <h2>See if live trading matches the chart.</h2>
+      <p class="intro">A backtest assumes you fill at the alert price, instantly. Hermes measures what actually happened.</p>
+      <div class="lp-list">
+        <div><svg data-i="arrow-right"></svg><span><b>Alert price vs fill price</b>, in basis points, for every order.</span></div>
+        <div><svg data-i="timer"></svg><span><b>Alert to fill time</b>, split into each step, in milliseconds.</span></div>
+        <div><svg data-i="octagon-x"></svg><span><b>Every alert that did not trade</b>, with the reason.</span></div>
+        <div><svg data-i="chart-column"></svg><span><b>A grade per strategy</b>, with the formula shown.</span></div>
+      </div>
+    </div>
+    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+      <div class="kpi"><div class="kpi-label">Fill rate</div><div class="kpi-value">91.2<span class="u">%</span></div><div class="kpi-sub">135 of 148</div></div>
+      <div class="kpi"><div class="kpi-label">Median alert to fill</div><div class="kpi-value">486<span class="u">ms</span></div><div class="kpi-sub">p95 871 ms</div></div>
+      <div class="kpi"><div class="kpi-label">Median slippage</div><div class="kpi-value">4.1<span class="u">bps</span></div><div class="kpi-sub">cap 30 bps</div></div>
+      <div class="kpi" style="border-left:0;border-top:1px solid var(--border-subtle)"><div class="kpi-label">Grade</div><div class="kpi-value">B</div><div class="kpi-sub">88.7 of 100</div></div>
+      <div class="kpi" style="border-top:1px solid var(--border-subtle)"><div class="kpi-label">Blocked by limits</div><div class="kpi-value">9</div><div class="kpi-sub">as you asked</div></div>
+      <div class="kpi" style="border-top:1px solid var(--border-subtle)"><div class="kpi-label">Missed</div><div class="kpi-value">13</div><div class="kpi-sub">each with a reason</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="lp-section" id="safety">
+  <h2>Built so a bad alert cannot become a bad day.</h2>
+  <div class="lp-cols c4">
+    <div class="feat"><span class="ic"><svg data-i="key-round"></svg></span><h3>Trade-only key</h3><p>Perpl API keys can trade but can never withdraw or transfer funds.</p></div>
+    <div class="feat"><span class="ic"><svg data-i="shield-check"></svg></span><h3>Wallet policy</h3><p>Your wallet can only interact with the Perpl exchange contract.</p></div>
+    <div class="feat"><span class="ic"><svg data-i="gauge"></svg></span><h3>Hard limits</h3><p>Every alert is checked against your limits before any order is sent.</p></div>
+    <div class="feat"><span class="ic"><svg data-i="hand"></svg></span><h3>Your approval</h3><p>Orders above your threshold wait for you, and expire if you do nothing.</p></div>
+  </div>
+</section>
+
+<footer class="lp-foot">
+  <span class="row g2"><span data-mark></span>Hermes · open source, MIT licence</span>
+  <span>Runs on Perpl, Monad testnet. No real funds.</span>
+</footer>
+</body>
+</html>
