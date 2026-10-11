@@ -21,6 +21,7 @@ export type AlertAction = (typeof ALERT_ACTIONS)[number];
  *   received -> verified -> risk_checked -> (pending_approval ->) sent -> accepted -> filled | partially_filled
  *
  * Terminal failures: rejected_auth, duplicate, invalid, blocked, expired, failed.
+ * Terminal non-trade: dry_run (strategy dry-run mode: risk_checked, then stop).
  */
 export const ALERT_STATUSES = [
   "received",
@@ -37,6 +38,8 @@ export const ALERT_STATUSES = [
   "blocked",
   "expired",
   "failed",
+  /** Strategy is in dry-run mode: every check ran, nothing was sent to Perpl. */
+  "dry_run",
 ] as const;
 export const AlertStatus = z.enum(ALERT_STATUSES);
 export type AlertStatus = z.infer<typeof AlertStatus>;
@@ -51,6 +54,7 @@ export const TERMINAL_STATUSES: readonly AlertStatus[] = [
   "blocked",
   "expired",
   "failed",
+  "dry_run",
 ];
 export const IN_FLIGHT_STATUSES: readonly AlertStatus[] = [
   "received",

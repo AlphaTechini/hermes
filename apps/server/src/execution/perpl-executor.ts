@@ -62,6 +62,8 @@ export class PerplExecutor implements Executor {
     const handedOff = new Promise<void>((resolve) => (released = resolve));
     const handlers: OrderLifecycleHandlers = {
       sent: (e) => {
+        // file the raw frames of this order (and of every retry) under the Hermes order
+        this.clients.bindOrderFrames?.(ctx.userId, ctx.orderId, { rq: e.rq, sn: e.sn });
         if (e.kind !== "resend") {
           emit({ ...base, type: "sent", atMs: hiresNowMs(), rq: e.rq, sn: e.sn, lb: e.lb });
         }

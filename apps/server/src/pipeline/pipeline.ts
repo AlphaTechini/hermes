@@ -17,7 +17,7 @@ import type { Executor, ExecutionEvent, OrderIntent } from "../execution/types";
 import { conflict, notFound } from "../errors";
 import { silentLogger, type Logger } from "../logger";
 import type { PerplClient, PerplClientProvider } from "../perpl/types";
-import { evaluate, type PositionState, type RiskIntent, type RiskResult, type RiskState } from "../risk/evaluate";
+import { evaluateDetailed, type DetailedRiskResult, type PositionState, type RiskIntent, type RiskState } from "../risk/evaluate";
 import { utcDay, type AlertRow, type Repos, type StrategyRow } from "../db/repos";
 
 export const APPROVAL_TTL_MS = 120_000;
@@ -28,6 +28,7 @@ const RANK: Partial<Record<AlertStatus, number>> = {
   verified: 1,
   risk_checked: 2,
   pending_approval: 3,
+  dry_run: 3,
   sent: 4,
   accepted: 5,
   partially_filled: 6,
@@ -41,6 +42,7 @@ export interface PipelineDeps {
   executor: Executor;
   perpl?: PerplClientProvider | undefined;
   log?: Logger;
+  /** Fixed approval lifetime (tests). Without it the user's `limits.approvalExpirySec` applies. */
   approvalTtlMs?: number;
   now?: () => number;
 }
@@ -53,7 +55,7 @@ export class Pipeline {
   private readonly repos: Repos;
   private readonly bus: EventBus;
   private readonly log: Logger;
-  private readonly ttl: number;
+  private readonly ttlOverride: number | undefined;
   private readonly now: () => number;
   private executor: Executor;
   private unsubscribe: (() => void) | undefined;
@@ -68,7 +70,7 @@ export class Pipeline {
     this.executor = deps.executor;
     this.perpl = deps.perpl;
     this.log = deps.log ?? silentLogger;
-    this.ttl = deps.approvalTtlMs ?? APPROVAL_TTL_MS;
+    this.ttlOverride = deps.approvalTtlMs;
     this.now = deps.now ?? Date.now;
   }
 
@@ -159,7 +161,7 @@ export class Pipeline {
       notionalUsd,
       leverage: parsed.leverage,
     };
-    const result = evaluate(riskIntent, limits, state);
+    const result = evaluateDetailed(riskIntent, limits, state);
 
     // Remember what we resolved, even for blocked alerts (the UI and report card read these columns).
     const pos = positionFor(parsed.market);
@@ -174,18 +176,23 @@ export class Pipeline {
 
     if (!result.ok) return this.block(alertId, result);
 
-    this.transition(alertId, "risk_checked", {}, { needsApproval: result.needsApproval, notionalUsd });
-    if (result.needsApproval) return this.requestApproval(alert);
-    await this.execute(alertId, parsed, limits, pos, price, client);
+    this.transition(alertId, "risk_checked", {}, { needsApproval: result.needsApproval, notionalUsd, checks: result.checks });
+    if (strategy.dryRun) {
+      // Dry run: everything above ran for real, nothing below happens. No approval is requested either.
+      this.transition(alertId, "dry_run", {}, { needsApproval: result.needsApproval, notionalUsd, message: "Dry run: all checks passed, nothing was sent to Perpl." });
+      return;
+    }
+    if (result.needsApproval) return this.requestApproval(alert, limits);
+    await this.execute(alertId, parsed, limits, pos, price, client, strategy);
   }
 
   // -------------------------------------------------------------------------
   // Approval flow
   // -------------------------------------------------------------------------
 
-  private requestApproval(alert: AlertRow): void {
+  private requestApproval(alert: AlertRow, limits: RiskLimits): void {
     const createdAt = this.now();
-    const expiresAt = createdAt + this.ttl;
+    const expiresAt = createdAt + (this.ttlOverride ?? limits.approvalExpirySec * 1000);
     const row = this.repos.approvals.insert({
       id: `apr_${randomUUID().replace(/-/g, "").slice(0, 16)}`,
       alertId: alert.id,
@@ -275,13 +282,13 @@ export class Pipeline {
       state.alertAgeSec = 0;
       const price = parsed.price ?? parsed.limitPrice ?? (await this.markPrice(client, parsed.market));
       const notionalUsd = this.notional(parsed, price);
-      const result = evaluate(
+      const result = evaluateDetailed(
         { market: parsed.market, kind: parsed.intent.kind, side: parsed.intent.side, notionalUsd, leverage: parsed.leverage },
         limits,
         state,
       );
       if (!result.ok) return this.block(alertId, result);
-      await this.execute(alertId, parsed, limits, positionFor(parsed.market), price, client);
+      await this.execute(alertId, parsed, limits, positionFor(parsed.market), price, client, strategy);
     } catch (err) {
       this.log.error({ err, alertId }, "post-approval error");
       this.transition(alertId, "failed", { errorCode: "pipeline_error" }, {
@@ -314,15 +321,18 @@ export class Pipeline {
     list ??= this.repos.positions.list(alert.userId);
     const positions: Record<string, PositionState | undefined> = {};
     let openNotionalUsd = 0;
+    let unrealizedPnlUsd = 0;
     for (const p of list) {
       positions[p.market] = { side: p.side, size: p.size, notionalUsd: p.notionalUsd };
       openNotionalUsd += p.notionalUsd;
+      unrealizedPnlUsd += p.upnl;
     }
     const alertTime = parsed.timeMs ?? alert.receivedAtMs;
     const state: RiskState = {
       strategyEnabled: strategy.enabled,
       positions,
       realizedPnlTodayUsd: this.repos.dailyPnl.get(alert.userId, utcDay(now)),
+      unrealizedPnlUsd,
       openNotionalUsd,
       ordersLastMinute: this.repos.orders.countSince(alert.userId, now - 60_000),
       // Without any Perpl provider (the stub executor setup) we let the executor fail the order with
@@ -363,6 +373,7 @@ export class Pipeline {
     pos: PositionState | undefined,
     price: number | undefined,
     _client: PerplClient | undefined,
+    strategy?: StrategyRow,
   ): Promise<void> {
     const alert = this.repos.alerts.get(alertId)!;
     if (!isMarketSymbol(parsed.market)) throw new Error("unreachable: unknown market passed risk");
@@ -376,7 +387,8 @@ export class Pipeline {
       side,
       kind,
       type: parsed.orderType,
-      maxSlippageBps: parsed.maxSlippageBps ?? limits.defaultSlippageBps,
+      // most specific wins: the alert message, then the strategy's own setting, then the account default
+      maxSlippageBps: parsed.maxSlippageBps ?? strategy?.maxSlippageBps ?? limits.defaultSlippageBps,
     };
     if (parsed.limitPrice !== undefined) intent.limitPrice = parsed.limitPrice;
     if (parsed.leverage !== undefined) intent.leverage = parsed.leverage;
@@ -525,8 +537,8 @@ export class Pipeline {
   // State transitions
   // -------------------------------------------------------------------------
 
-  private block(alertId: string, r: Extract<RiskResult, { ok: false }>): void {
-    this.transition(alertId, "blocked", { blockReason: r.reason }, { reason: r.reason, detail: r.detail });
+  private block(alertId: string, r: Extract<DetailedRiskResult, { ok: false }>): void {
+    this.transition(alertId, "blocked", { blockReason: r.reason }, { reason: r.reason, detail: r.detail, checks: r.checks });
   }
 
   /**

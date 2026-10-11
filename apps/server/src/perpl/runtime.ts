@@ -6,7 +6,7 @@ import {
   PerplNetworkError,
   PerplSocketError,
 } from "@hermes/perpl";
-import type { PerplHealthDTO } from "@hermes/shared";
+import type { PerplContextDTO, PerplHealthDTO } from "@hermes/shared";
 import { HermesError } from "../errors";
 import type { PerplClientProvider } from "./types";
 
@@ -31,6 +31,10 @@ export interface PerplRuntime extends PerplClientProvider {
   validate?(userId: string, creds: PerplCredentialsInput): Promise<void>;
   /** Simulator only: generate a key pair, enroll it, create a funded account and return it ready to be saved. */
   provisionSim?(userId: string): PerplCredentialsInput & { collateralUsd: number };
+  /** Perpl's `pub/context` (the simulator's in sim mode) for onboarding. */
+  context?(): Promise<PerplContextDTO>;
+  /** Find the account id of an API key (and wallet) when the user did not enter one. Throws `perpl_account_not_found`. */
+  lookupAccount?(userId: string, key: { apiKeyPublic: string; apiKeyPrivate: string }, walletAddress: string | null): Promise<string>;
 }
 
 export type PerplErrorCode =

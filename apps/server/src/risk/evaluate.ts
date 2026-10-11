@@ -1,4 +1,4 @@
-import { isMarketSymbol, type BlockReason, type RiskLimits, type Side } from "@hermes/shared";
+import { isMarketSymbol, type BlockReason, type RiskCheckResult, type RiskLimits, type Side } from "@hermes/shared";
 
 export interface RiskIntent {
   /** Base symbol, e.g. "BTC". */
@@ -25,6 +25,11 @@ export interface RiskState {
   positions: Record<string, PositionState | undefined>;
   /** Realised PnL since 00:00 UTC, USD (negative = loss). */
   realizedPnlTodayUsd: number;
+  /**
+   * Current unrealised PnL of the open positions, USD (negative = loss). The daily loss stop is evaluated against
+   * realised + unrealised, which is the "Today PnL" the top bar shows. Defaults to 0.
+   */
+  unrealizedPnlUsd?: number | undefined;
   /** Total open notional across markets, USD. */
   openNotionalUsd: number;
   /** Orders submitted by this user in the last 60 s. */
@@ -38,7 +43,28 @@ export type RiskResult =
   | { ok: true; needsApproval: boolean }
   | { ok: false; reason: BlockReason; detail: string };
 
-const block = (reason: BlockReason, detail: string): RiskResult => ({ ok: false, reason, detail });
+/** A {@link RiskResult} plus the outcome of every rule, in evaluation order. */
+export type DetailedRiskResult = RiskResult & { checks: RiskCheckResult[] };
+
+const usd = (n: number) => `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
+
+interface Outcome {
+  passed: boolean;
+  value: number | string | boolean | null;
+  limit: number | string | boolean | null;
+  unit: string | null;
+  detail: string;
+  reason?: BlockReason;
+}
+interface Rule {
+  key: string;
+  label: string;
+  /** Rules marked open-only are skipped for closing (reduce-only) orders. */
+  openOnly: boolean;
+  /** Rules marked close-only are left out of the list for opening orders. */
+  closeOnly?: boolean;
+  run(): Outcome;
+}
 
 /**
  * Pure risk gate. Checks run in this order and the first failure wins:
@@ -52,76 +78,229 @@ const block = (reason: BlockReason, detail: string): RiskResult => ({ ok: false,
  *  Opens continue:
  *  5. trading_paused
  *  6. market_not_allowed      (not in allowedMarkets or not a Perpl market)
- *  7. daily_loss_stop_hit     (realised PnL today <= -dailyLossStopUsd; 0 disables)
+ *  7. daily_loss_stop_hit     (realised + unrealised PnL today <= -dailyLossStopUsd; 0 disables)
  *  8. invalid_size            (notional unknown / not > 0)
  *  9. leverage_above_max
  * 10. size_above_max          (existing same-side position + new notional > maxPositionUsd)
  *
  * `needsApproval` is true when the order notional >= approvalThresholdUsd (0 disables approvals).
+ *
+ * `evaluateDetailed` also returns the outcome of every rule (`checks`): the failing one, everything evaluated before
+ * it, and the rest marked `skipped`. `evaluate` is the same gate without the list.
  */
-export function evaluate(intent: RiskIntent, limits: RiskLimits, state: RiskState): RiskResult {
-  if (!state.strategyEnabled) return block("strategy_disabled", "The strategy is disabled.");
-
-  if (state.alertAgeSec > limits.maxAlertAgeSec) {
-    return block(
-      "stale_alert",
-      `Alert is ${state.alertAgeSec.toFixed(1)}s old; the maximum is ${limits.maxAlertAgeSec}s.`,
-    );
-  }
-
-  if (state.ordersLastMinute >= limits.maxOrdersPerMinute) {
-    return block(
-      "rate_limited",
-      `${state.ordersLastMinute} orders in the last minute; the maximum is ${limits.maxOrdersPerMinute}.`,
-    );
-  }
-
-  if (!state.perplConnected) return block("perpl_not_connected", "Perpl is not connected.");
-
+export function evaluateDetailed(intent: RiskIntent, limits: RiskLimits, state: RiskState): DetailedRiskResult {
   const market = intent.market.toUpperCase();
-
-  if (intent.kind === "close") {
-    const pos = state.positions[market];
-    if (!pos || !(pos.size > 0)) return block("no_position_to_close", `No open ${market} position.`);
-    if (intent.side && pos.side !== intent.side) {
-      return block("no_position_to_close", `Open ${market} position is ${pos.side}, not ${intent.side}.`);
-    }
-    return { ok: true, needsApproval: false };
-  }
-
-  if (limits.paused) return block("trading_paused", "Trading is paused.");
-
-  const allowed = limits.allowedMarkets.map((m) => m.toUpperCase());
-  if (!isMarketSymbol(market) || !allowed.includes(market)) {
-    return block("market_not_allowed", `${market} is not in your allowed markets (${allowed.join(", ") || "none"}).`);
-  }
-
-  if (limits.dailyLossStopUsd > 0 && state.realizedPnlTodayUsd <= -limits.dailyLossStopUsd) {
-    return block(
-      "daily_loss_stop_hit",
-      `Realised PnL today is ${state.realizedPnlTodayUsd.toFixed(2)} USD; the stop is -${limits.dailyLossStopUsd}.`,
-    );
-  }
-
+  const isClose = intent.kind === "close";
   const notional = intent.notionalUsd;
-  if (notional === null || !Number.isFinite(notional) || notional <= 0) {
-    return block("invalid_size", "Order size could not be determined or is not positive.");
-  }
-
-  if (intent.leverage !== undefined && intent.leverage > limits.maxLeverage) {
-    return block("leverage_above_max", `Leverage ${intent.leverage}x exceeds the maximum ${limits.maxLeverage}x.`);
-  }
-
+  const allowed = limits.allowedMarkets.map((m) => m.toUpperCase());
+  const unrealized = state.unrealizedPnlUsd ?? 0;
+  const todayPnl = state.realizedPnlTodayUsd + unrealized;
   const existing = state.positions[market];
-  const sameSide = existing && intent.side !== null && existing.side === intent.side ? existing.notionalUsd : 0;
-  const resulting = sameSide + notional;
-  if (resulting > limits.maxPositionUsd) {
-    return block(
-      "size_above_max",
-      `Resulting ${market} position ${resulting.toFixed(2)} USD exceeds the maximum ${limits.maxPositionUsd} USD.`,
-    );
-  }
 
-  const needsApproval = limits.approvalThresholdUsd > 0 && notional >= limits.approvalThresholdUsd;
-  return { ok: true, needsApproval };
+  const rules: Rule[] = [
+    {
+      key: "strategy_enabled",
+      label: "Strategy enabled",
+      openOnly: false,
+      run: () => ({
+        passed: state.strategyEnabled,
+        value: state.strategyEnabled ? "On" : "Off",
+        limit: "On",
+        unit: null,
+        detail: "The strategy is disabled.",
+        reason: "strategy_disabled",
+      }),
+    },
+    {
+      key: "alert_age",
+      label: "Alert age",
+      openOnly: false,
+      run: () => ({
+        passed: !(state.alertAgeSec > limits.maxAlertAgeSec),
+        value: Math.round(state.alertAgeSec * 10) / 10,
+        limit: limits.maxAlertAgeSec,
+        unit: "s",
+        detail: `Alert is ${state.alertAgeSec.toFixed(1)}s old; the maximum is ${limits.maxAlertAgeSec}s.`,
+        reason: "stale_alert",
+      }),
+    },
+    {
+      key: "rate_limit",
+      label: "Orders per minute",
+      openOnly: false,
+      run: () => ({
+        passed: !(state.ordersLastMinute >= limits.maxOrdersPerMinute),
+        value: state.ordersLastMinute,
+        limit: limits.maxOrdersPerMinute,
+        unit: "orders/min",
+        detail: `${state.ordersLastMinute} orders in the last minute; the maximum is ${limits.maxOrdersPerMinute}.`,
+        reason: "rate_limited",
+      }),
+    },
+    {
+      key: "perpl_connected",
+      label: "Perpl connected",
+      openOnly: false,
+      run: () => ({
+        passed: state.perplConnected,
+        value: state.perplConnected ? "Connected" : "Not connected",
+        limit: "Connected",
+        unit: null,
+        detail: "Perpl is not connected.",
+        reason: "perpl_not_connected",
+      }),
+    },
+    {
+      key: "position_to_close",
+      label: "Open position to close",
+      openOnly: false,
+      closeOnly: true,
+      run: () => {
+        if (!existing || !(existing.size > 0)) {
+          return { passed: false, value: "None", limit: intent.side ?? "any side", unit: null, detail: `No open ${market} position.`, reason: "no_position_to_close" };
+        }
+        const wrongSide = intent.side !== null && existing.side !== intent.side;
+        return {
+          passed: !wrongSide,
+          value: `${existing.side} ${existing.size}`,
+          limit: intent.side ?? "any side",
+          unit: null,
+          detail: `Open ${market} position is ${existing.side}, not ${intent.side}.`,
+          reason: "no_position_to_close",
+        };
+      },
+    },
+    {
+      key: "pause",
+      label: "Trading not paused",
+      openOnly: true,
+      run: () => ({
+        passed: !limits.paused,
+        value: limits.paused ? "Paused" : "Running",
+        limit: "Running",
+        unit: null,
+        detail: "Trading is paused.",
+        reason: "trading_paused",
+      }),
+    },
+    {
+      key: "markets",
+      label: "Market allowed",
+      openOnly: true,
+      run: () => ({
+        passed: isMarketSymbol(market) && allowed.includes(market),
+        value: market,
+        limit: allowed.join(", ") || "none",
+        unit: null,
+        detail: `${market} is not in your allowed markets (${allowed.join(", ") || "none"}).`,
+        reason: "market_not_allowed",
+      }),
+    },
+    {
+      key: "daily_loss",
+      label: "Daily loss stop",
+      openOnly: true,
+      run: () => ({
+        passed: !(limits.dailyLossStopUsd > 0 && todayPnl <= -limits.dailyLossStopUsd),
+        // loss used so far today (realised + unrealised), against the stop
+        value: Math.round(Math.max(0, -todayPnl) * 100) / 100,
+        limit: limits.dailyLossStopUsd > 0 ? limits.dailyLossStopUsd : null,
+        unit: "USD",
+        detail: `PnL today is ${usd(todayPnl)} (realised ${usd(state.realizedPnlTodayUsd)}, unrealised ${usd(unrealized)}); the stop is -$${limits.dailyLossStopUsd}.`,
+        reason: "daily_loss_stop_hit",
+      }),
+    },
+    {
+      key: "size_known",
+      label: "Order size known",
+      openOnly: true,
+      run: () => ({
+        passed: !(notional === null || !Number.isFinite(notional) || notional <= 0),
+        value: notional !== null && Number.isFinite(notional) ? Math.round(notional * 100) / 100 : null,
+        limit: null,
+        unit: "USD",
+        detail: "Order size could not be determined or is not positive.",
+        reason: "invalid_size",
+      }),
+    },
+    {
+      key: "leverage",
+      label: "Max leverage",
+      openOnly: true,
+      run: () => ({
+        passed: !(intent.leverage !== undefined && intent.leverage > limits.maxLeverage),
+        value: intent.leverage ?? null,
+        limit: limits.maxLeverage,
+        unit: "x",
+        detail: `Leverage ${intent.leverage}x exceeds the maximum ${limits.maxLeverage}x.`,
+        reason: "leverage_above_max",
+      }),
+    },
+    {
+      key: "size",
+      label: "Max position size",
+      openOnly: true,
+      run: () => {
+        const sameSide = existing && intent.side !== null && existing.side === intent.side ? existing.notionalUsd : 0;
+        const resulting = sameSide + (notional ?? 0);
+        return {
+          passed: !(resulting > limits.maxPositionUsd),
+          value: Math.round(resulting * 100) / 100,
+          limit: limits.maxPositionUsd,
+          unit: "USD",
+          detail: `Resulting ${market} position ${resulting.toFixed(2)} USD exceeds the maximum ${limits.maxPositionUsd} USD.`,
+          reason: "size_above_max",
+        };
+      },
+    },
+    {
+      key: "approval",
+      label: "Approval threshold",
+      openOnly: true,
+      run: () => {
+        const needs = limits.approvalThresholdUsd > 0 && (notional ?? 0) >= limits.approvalThresholdUsd;
+        return {
+          passed: true, // informational: crossing it sends the order to the approvals queue, it never blocks
+          value: notional !== null && Number.isFinite(notional) ? Math.round(notional * 100) / 100 : null,
+          limit: limits.approvalThresholdUsd > 0 ? limits.approvalThresholdUsd : null,
+          unit: "USD",
+          detail: needs ? "Above the approval threshold: waits for your approval." : "Under the approval threshold: sent without waiting.",
+        };
+      },
+    },
+  ];
+
+  const checks: RiskCheckResult[] = [];
+  let failure: Extract<RiskResult, { ok: false }> | undefined;
+  let needsApproval = false;
+  for (const rule of rules) {
+    if (rule.closeOnly && !isClose) continue;
+    const base = { key: rule.key, label: rule.label };
+    if (failure) {
+      checks.push({ ...base, passed: null, skipped: true, value: null, limit: null, unit: null, detail: "Not evaluated because an earlier check failed." });
+      continue;
+    }
+    if (isClose && rule.openOnly) {
+      checks.push({ ...base, passed: null, skipped: true, value: null, limit: null, unit: null, detail: "Closing orders ignore this limit." });
+      continue;
+    }
+    const o = rule.run();
+    if (rule.key === "approval") needsApproval = o.detail.startsWith("Above");
+    checks.push({
+      ...base,
+      passed: o.passed,
+      skipped: false,
+      value: o.value,
+      limit: o.limit,
+      unit: o.unit,
+      detail: o.passed ? (rule.key === "approval" ? o.detail : "Passed.") : o.detail,
+    });
+    if (!o.passed && o.reason) failure = { ok: false, reason: o.reason, detail: o.detail };
+  }
+  return failure ? { ...failure, checks } : { ok: true, needsApproval, checks };
+}
+
+export function evaluate(intent: RiskIntent, limits: RiskLimits, state: RiskState): RiskResult {
+  const { checks: _checks, ...result } = evaluateDetailed(intent, limits, state);
+  return result;
 }

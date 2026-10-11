@@ -184,4 +184,28 @@ CREATE TABLE wallet_actions (
 CREATE INDEX idx_wallet_actions_user_created ON wallet_actions(user_id, created_at DESC);
 `,
   },
+  {
+    version: 3,
+    name: "strategy_extras_limits_updated_at_order_frames",
+    sql: `
+-- Strategy extras: dry run (stop after the risk checks), per-strategy max slippage override, reserved order type.
+ALTER TABLE strategies ADD COLUMN dry_run INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE strategies ADD COLUMN max_slippage_bps INTEGER;
+ALTER TABLE strategies ADD COLUMN order_type TEXT NOT NULL DEFAULT 'market';
+
+-- When the limits were last saved.
+ALTER TABLE risk_limits ADD COLUMN updated_at INTEGER;
+
+-- Raw Perpl frames per order: the mt:22 frame sent and every mt:3 / mt:24 / mt:25 frame received for it.
+CREATE TABLE order_frames (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('out', 'in')),
+  mt INTEGER NOT NULL,
+  at_ms REAL NOT NULL,
+  json TEXT NOT NULL
+);
+CREATE INDEX idx_order_frames_order ON order_frames(order_id, at_ms, id);
+`,
+  },
 ];

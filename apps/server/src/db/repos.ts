@@ -13,7 +13,10 @@ import {
   type BlockReason,
   type Fill,
   type Order,
+  type OrderFrame,
   type OrderStatus,
+  type RiskCheckResult,
+  type StrategyOrderType,
   type Position,
   type Side,
 } from "@hermes/shared";
@@ -52,6 +55,9 @@ export interface StrategyRow {
   defaultMarket: string | null;
   defaultSizeUsd: number | null;
   defaultLeverage: number | null;
+  dryRun: boolean;
+  maxSlippageBps: number | null;
+  orderType: StrategyOrderType;
   createdAt: number;
 }
 
@@ -173,6 +179,12 @@ export interface ReportAlertInput {
   /** hi-res time of the first filled/partially_filled event. */
   firstFillEventAtMs: number | null;
   fills: { price: number; size: number; fee: number; realizedPnl: number | null; atMs: number }[];
+  /** An approval row exists for this alert (any outcome). */
+  approvalGated: boolean;
+  /** Epoch ms of the human decision when the approval was approved, else null. */
+  approvalDecidedAtMs: number | null;
+  /** Number of `sent` events (more than one = the order was retried). */
+  sentCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +212,9 @@ const toStrategy = (r: Raw): StrategyRow => ({
   defaultMarket: str(r.default_market),
   defaultSizeUsd: num(r.default_size_usd),
   defaultLeverage: num(r.default_leverage),
+  dryRun: Number(r.dry_run ?? 0) === 1,
+  maxSlippageBps: num(r.max_slippage_bps),
+  orderType: "market",
   createdAt: Number(r.created_at),
 });
 
@@ -383,11 +398,12 @@ export function createRepos(db: Db) {
   const qStratGet = db.prepare("SELECT * FROM strategies WHERE id = ?");
   const qStratList = db.prepare("SELECT * FROM strategies WHERE user_id = ? ORDER BY created_at ASC");
   const qStratInsert = db.prepare(`
-    INSERT INTO strategies (id, user_id, name, secret_enc, enabled, default_market, default_size_usd, default_leverage, created_at)
-    VALUES (@id, @user_id, @name, @secret_enc, @enabled, @default_market, @default_size_usd, @default_leverage, @created_at)`);
+    INSERT INTO strategies (id, user_id, name, secret_enc, enabled, default_market, default_size_usd, default_leverage, dry_run, max_slippage_bps, order_type, created_at)
+    VALUES (@id, @user_id, @name, @secret_enc, @enabled, @default_market, @default_size_usd, @default_leverage, @dry_run, @max_slippage_bps, @order_type, @created_at)`);
   const qStratUpdate = db.prepare(`
     UPDATE strategies SET name = @name, enabled = @enabled, default_market = @default_market,
-      default_size_usd = @default_size_usd, default_leverage = @default_leverage WHERE id = @id`);
+      default_size_usd = @default_size_usd, default_leverage = @default_leverage,
+      dry_run = @dry_run, max_slippage_bps = @max_slippage_bps, order_type = @order_type WHERE id = @id`);
   const qStratSecret = db.prepare("UPDATE strategies SET secret_enc = ? WHERE id = ?");
   const qStratDelete = db.prepare("DELETE FROM strategies WHERE id = ?");
   const qStratStats = db.prepare(
@@ -402,7 +418,10 @@ export function createRepos(db: Db) {
     listByUser(userId: string): StrategyRow[] {
       return (qStratList.all(userId) as Raw[]).map(toStrategy);
     },
-    create(s: Omit<StrategyRow, "createdAt"> & { createdAt?: number }): StrategyRow {
+    create(
+      s: Omit<StrategyRow, "createdAt" | "dryRun" | "maxSlippageBps" | "orderType"> &
+        Partial<Pick<StrategyRow, "dryRun" | "maxSlippageBps" | "orderType">> & { createdAt?: number },
+    ): StrategyRow {
       qStratInsert.run({
         id: s.id,
         user_id: s.userId,
@@ -412,13 +431,16 @@ export function createRepos(db: Db) {
         default_market: s.defaultMarket,
         default_size_usd: s.defaultSizeUsd,
         default_leverage: s.defaultLeverage,
+        dry_run: s.dryRun ? 1 : 0,
+        max_slippage_bps: s.maxSlippageBps ?? null,
+        order_type: s.orderType ?? "market",
         created_at: s.createdAt ?? Date.now(),
       });
       return strategies.get(s.id) as StrategyRow;
     },
     update(
       id: string,
-      patch: Partial<Pick<StrategyRow, "name" | "enabled" | "defaultMarket" | "defaultSizeUsd" | "defaultLeverage">>,
+      patch: Partial<Pick<StrategyRow, "name" | "enabled" | "defaultMarket" | "defaultSizeUsd" | "defaultLeverage" | "dryRun" | "maxSlippageBps" | "orderType">>,
     ): StrategyRow | undefined {
       const cur = strategies.get(id);
       if (!cur) return undefined;
@@ -430,6 +452,9 @@ export function createRepos(db: Db) {
         default_market: next.defaultMarket,
         default_size_usd: next.defaultSizeUsd,
         default_leverage: next.defaultLeverage,
+        dry_run: next.dryRun ? 1 : 0,
+        max_slippage_bps: next.maxSlippageBps,
+        order_type: next.orderType,
       });
       return strategies.get(id);
     },
@@ -446,25 +471,26 @@ export function createRepos(db: Db) {
   };
 
   // --- risk limits ---
-  const qLimGet = db.prepare("SELECT json FROM risk_limits WHERE user_id = ?");
+  const qLimGet = db.prepare("SELECT json, updated_at FROM risk_limits WHERE user_id = ?");
   const qLimPut = db.prepare(
-    "INSERT INTO risk_limits (user_id, json) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json",
+    "INSERT INTO risk_limits (user_id, json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at",
   );
   const limits = {
-    /** Returns stored limits merged over defaults. */
+    /** Returns stored limits merged over defaults, with `updatedAt` = last save (null before the first save). */
     get(userId: string): RiskLimits {
-      const r = qLimGet.get(userId) as { json: string } | undefined;
-      if (!r) return RiskLimits.parse({});
+      const r = qLimGet.get(userId) as { json: string; updated_at: number | null } | undefined;
+      if (!r) return { ...RiskLimits.parse({}), updatedAt: null };
       try {
-        return RiskLimits.parse(JSON.parse(r.json));
+        return { ...RiskLimits.parse(JSON.parse(r.json)), updatedAt: r.updated_at };
       } catch {
-        return RiskLimits.parse({});
+        return { ...RiskLimits.parse({}), updatedAt: r.updated_at };
       }
     },
     put(userId: string, value: RiskLimits): RiskLimits {
-      const clean = RiskLimits.parse(value);
-      qLimPut.run(userId, JSON.stringify(clean));
-      return clean;
+      const { updatedAt: _ignored, ...clean } = RiskLimits.parse(value);
+      const at = Date.now();
+      qLimPut.run(userId, JSON.stringify(clean), at);
+      return { ...RiskLimits.parse(clean), updatedAt: at };
     },
   };
 
@@ -516,8 +542,12 @@ export function createRepos(db: Db) {
     }));
     const receivedEv = events.find((e) => e.status === "received");
     const firstFill = events.find((e) => e.status === "partially_filled" || e.status === "filled");
-    const latencyMs =
-      firstFill && receivedEv ? Math.round((firstFill.atMs - receivedEv.atMs) * 1000) / 1000 : null;
+    // Human approval wait is not Hermes or Perpl latency: for approved alerts the clock starts at the decision.
+    const appr = approvals.byAlert(row.id);
+    const decidedAt = appr && appr.status === "approved" ? appr.decidedAt : null;
+    const base = receivedEv ? (decidedAt !== null ? Math.max(receivedEv.atMs, decidedAt) : receivedEv.atMs) : null;
+    const latencyMs = firstFill && base !== null ? Math.max(0, Math.round((firstFill.atMs - base) * 1000) / 1000) : null;
+    const approvalWaitMs = appr && appr.decidedAt !== null ? Math.max(0, appr.decidedAt - appr.createdAt) : null;
     const totalSize = fills.reduce((a, f) => a + f.size, 0);
     const avgFillPrice = totalSize > 0 ? fills.reduce((a, f) => a + f.price * f.size, 0) / totalSize : null;
     let slippage: number | null = null;
@@ -543,6 +573,7 @@ export function createRepos(db: Db) {
       createdAt: row.createdAt,
       events,
       latencyMs,
+      ...(appr ? { approvalWaitMs } : {}),
       avgFillPrice,
       slippageBps: slippage,
     };
@@ -770,6 +801,26 @@ export function createRepos(db: Db) {
     },
   };
 
+  // --- raw Perpl frames per order ---
+  const qFrameInsert = db.prepare(
+    "INSERT INTO order_frames (order_id, direction, mt, at_ms, json) VALUES (@order_id, @direction, @mt, @at_ms, @json)",
+  );
+  const qFramesByOrder = db.prepare("SELECT * FROM order_frames WHERE order_id = ? ORDER BY at_ms ASC, id ASC");
+  const orderFrames = {
+    insert(f: { orderId: string; direction: "out" | "in"; mt: number; atMs: number; json: string }): void {
+      qFrameInsert.run({ order_id: f.orderId, direction: f.direction, mt: f.mt, at_ms: f.atMs, json: f.json });
+    },
+    byOrder(orderId: string): OrderFrame[] {
+      return (qFramesByOrder.all(orderId) as Raw[]).map((r) => ({
+        id: Number(r.id),
+        direction: String(r.direction) as "out" | "in",
+        mt: Number(r.mt),
+        atMs: Number(r.at_ms),
+        json: String(r.json),
+      }));
+    },
+  };
+
   // --- positions ---
   const qPosList = db.prepare("SELECT * FROM positions WHERE user_id = ? ORDER BY market ASC");
   const qPosDeleteAll = db.prepare("DELETE FROM positions WHERE user_id = ?");
@@ -870,18 +921,21 @@ export function createRepos(db: Db) {
 
   // --- report inputs ---
   const qReportAlerts = db.prepare(
-    "SELECT * FROM alerts WHERE strategy_id = ? AND received_at_ms >= ? ORDER BY received_at_ms ASC",
+    "SELECT * FROM alerts WHERE strategy_id = ? AND received_at_ms >= ? AND received_at_ms < ? ORDER BY received_at_ms ASC",
   );
+  const qSentCount = db.prepare("SELECT COUNT(*) AS n FROM alert_events WHERE alert_id = ? AND status = 'sent'");
   const qReportEvents = db.prepare(
     "SELECT status, MIN(at_ms) AS at_ms FROM alert_events WHERE alert_id = ? AND status IN ('received','partially_filled','filled') GROUP BY status",
   );
   const reports = {
-    alertsForStrategy(strategyId: string, sinceMs: number): ReportAlertInput[] {
-      const rows = (qReportAlerts.all(strategyId, sinceMs) as Raw[]).map(toAlertRow);
+    /** Alerts of a strategy received in [sinceMs, untilMs). */
+    alertsForStrategy(strategyId: string, sinceMs: number, untilMs: number = Number.MAX_SAFE_INTEGER): ReportAlertInput[] {
+      const rows = (qReportAlerts.all(strategyId, sinceMs, untilMs) as Raw[]).map(toAlertRow);
       return rows.map((a) => {
         const evs = qReportEvents.all(a.id) as { status: string; at_ms: number }[];
         const received = evs.find((e) => e.status === "received")?.at_ms ?? a.receivedAtMs;
         const fillTimes = evs.filter((e) => e.status !== "received").map((e) => e.at_ms);
+        const appr = approvals.byAlert(a.id);
         return {
           id: a.id,
           status: a.status,
@@ -894,6 +948,9 @@ export function createRepos(db: Db) {
           receivedAtMs: a.receivedAtMs,
           receivedEventAtMs: received,
           firstFillEventAtMs: fillTimes.length ? Math.min(...fillTimes) : null,
+          approvalGated: Boolean(appr),
+          approvalDecidedAtMs: appr && appr.status === "approved" ? appr.decidedAt : null,
+          sentCount: (qSentCount.get(a.id) as { n: number }).n,
           fills: (qFillsByAlert.all(a.id) as Raw[]).map((f) => ({
             price: Number(f.price),
             size: Number(f.size),
@@ -916,10 +973,21 @@ export function createRepos(db: Db) {
       ...rec,
       rawBody: row.rawBody,
       parsed: parseJsonObject(row.parsedJson),
-      orders: orders.byAlert(id),
+      riskChecks: riskChecksOf(rec.events),
+      orders: orders.byAlert(id).map((o) => ({ ...o, frames: orderFrames.byOrder(o.id) })),
       fills: fills.byAlert(id),
       approval: appr ? toApprovalDto(appr, rec) : null,
     };
+  }
+
+  /** The checks of the latest event that carries them (`risk_checked`, or `blocked` when the gate failed). */
+  function riskChecksOf(events: AlertEventDTO[]): RiskCheckResult[] | null {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const ev = events[i];
+      const checks = ev?.detail?.checks;
+      if (ev && (ev.status === "risk_checked" || ev.status === "blocked") && Array.isArray(checks)) return checks as RiskCheckResult[];
+    }
+    return null;
   }
 
   function toApprovalDto(a: ApprovalRow, rec?: AlertRecord): Approval {
@@ -948,6 +1016,7 @@ export function createRepos(db: Db) {
     alerts,
     orders,
     fills,
+    orderFrames,
     positions,
     approvals,
     dailyPnl,

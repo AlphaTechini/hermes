@@ -61,7 +61,16 @@ export interface StrategyDTO {
   templates: TradingViewTemplates;
   alertCount: number;
   lastAlertAt: number | null;
+  /** Dry run: every alert runs all risk checks and is recorded as `dry_run`; nothing is sent to Perpl. */
+  dryRun: boolean;
+  /** Max slippage in bps for this strategy's orders. null = use the account default (`limits.defaultSlippageBps`). An `max_slippage_bps` inside the alert message still wins. */
+  maxSlippageBps: number | null;
+  /** Reserved. Only "market" (IOC with a slippage bound) is executed today. */
+  orderType: StrategyOrderType;
 }
+
+export const STRATEGY_ORDER_TYPES = ["market"] as const;
+export type StrategyOrderType = (typeof STRATEGY_ORDER_TYPES)[number];
 
 /** Returned by create, rotate-secret and reveal. The only places the plaintext secret is exposed. */
 export interface StrategySecretDTO extends StrategyDTO {
@@ -76,6 +85,9 @@ export const CreateStrategyRequest = z.object({
   defaultMarket: z.string().trim().min(1).max(32).nullable().optional(),
   defaultSizeUsd: z.number().positive().nullable().optional(),
   defaultLeverage: z.number().positive().nullable().optional(),
+  dryRun: z.boolean().optional(),
+  maxSlippageBps: z.number().int().min(0).max(10_000).nullable().optional(),
+  orderType: z.enum(STRATEGY_ORDER_TYPES).optional(),
 });
 export type CreateStrategyRequest = z.infer<typeof CreateStrategyRequest>;
 
@@ -110,6 +122,24 @@ export interface AlertEventDTO {
   detail: Record<string, unknown> | null;
 }
 
+/** One rule evaluated by the risk gate. Stored in the `risk_checked` (or `blocked`) alert event `detail.checks`. */
+export interface RiskCheckResult {
+  /** strategy_enabled, alert_age, rate_limit, perpl_connected, position_to_close, pause, markets, daily_loss, size, leverage, approval. */
+  key: string;
+  label: string;
+  /** true = passed, false = failed (this one blocked the alert), null = skipped (not evaluated). */
+  passed: boolean | null;
+  skipped: boolean;
+  /** What was measured (for example the order notional, the leverage, the market). null when not applicable. */
+  value: number | string | boolean | null;
+  /** The configured limit it was compared with. null when not applicable. */
+  limit: number | string | boolean | null;
+  /** "USD", "x", "s", "orders/min" or null. */
+  unit: string | null;
+  /** Readable one-liner (failure reason, or why it was skipped). */
+  detail?: string;
+}
+
 export interface AlertRecord {
   id: string;
   strategyId: string;
@@ -130,8 +160,13 @@ export interface AlertRecord {
   receivedAt: number;
   createdAt: number;
   events: AlertEventDTO[];
-  /** received -> first fill, ms. null until filled. */
+  /**
+   * received -> first fill, ms, EXCLUDING the time the alert waited for human approval (for approval-gated alerts it is
+   * approval decision -> first fill). null until filled.
+   */
   latencyMs: number | null;
+  /** Time spent waiting for the human approval decision (ms), null when the alert was not approval-gated or is undecided. */
+  approvalWaitMs?: number | null;
   /** Volume-weighted average fill price. */
   avgFillPrice: number | null;
   /** Signed bps vs alert price; positive = worse for the trader. */
@@ -149,9 +184,23 @@ export interface AlertDetail extends AlertRecord {
   orders: Order[];
   fills: Fill[];
   approval: Approval | null;
+  /** Result of every risk rule evaluated for this alert (also on blocked alerts, the rest `skipped`). null for alerts that never reached the risk gate. */
+  riskChecks?: RiskCheckResult[] | null;
 }
 
 // --- orders / fills / positions / account -----------------------------------
+
+/** A raw Perpl frame recorded for an order. Only present on `GET /api/alerts/:id` orders. */
+export interface OrderFrame {
+  id: number;
+  /** out = sent by Hermes (mt:22), in = received (mt:3, mt:24, mt:25). */
+  direction: "out" | "in";
+  mt: number;
+  /** Epoch ms with sub-ms precision (send time / receive time on the Hermes clock). */
+  atMs: number;
+  /** The frame as JSON text. For `out` this is the exact string-able object that was sent (rq, sn, lb, ...). */
+  json: string;
+}
 
 export interface Order {
   id: string;
@@ -174,6 +223,8 @@ export interface Order {
   txHash: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Raw Perpl frames of this order (sent mt:22, received mt:3 / mt:24 / mt:25), oldest first. */
+  frames?: OrderFrame[];
 }
 
 export interface Fill {
@@ -218,6 +269,14 @@ export interface AccountSummary {
   live: boolean;
   /** Collateral locked in open positions (margin used), USD. Present on live reads. */
   marginUsedUsd?: number;
+  /** Realised PnL today (UTC) + current unrealised PnL: the number the daily loss stop is evaluated against. */
+  todayPnlUsd?: number;
+  todayRealizedUsd?: number;
+  todayUnrealizedUsd?: number;
+  /** Configured daily loss stop (`limits.dailyLossStopUsd`), 0 = disabled. */
+  lossStopUsd?: number;
+  /** max(0, -todayPnlUsd): how much of the stop is used. */
+  lossStopUsedUsd?: number;
 }
 
 // --- approvals ---------------------------------------------------------------
@@ -257,10 +316,17 @@ export interface PerplHealthDTO {
   lastHeartbeatAt: number | null;
   /** `now - lastHeartbeatAt` at the moment this DTO was built, ms. */
   heartbeatAgeMs: number | null;
-  /** Round-trip estimate to Perpl (timed REST call, smoothed), ms. */
+  /**
+   * Round trip to Perpl, ms: moving average of mt:22 send -> mt:3 receive when orders were placed recently,
+   * otherwise a timed public REST call (smoothed). Never the Hermes API round trip.
+   */
   latencyMs: number | null;
-  /** Newest chain block seen on the heartbeat. */
+  /** Where `latencyMs` comes from. */
+  latencySource?: "order" | "probe" | null;
+  /** Newest chain block seen on the heartbeat (sim and live). */
   headBlock: number | null;
+  /** Block time estimated from heartbeat head deltas, ms (400 until measured). */
+  blockTimeMs: number | null;
   /** Reconnects since the registry created this client. */
   reconnects: number;
   /** Last connection error, readable. Cleared when connected. */
@@ -286,16 +352,33 @@ export interface PerplConnectionDTO {
 }
 
 export const PutPerplConnectionRequest = z.object({
-  accountId: z.union([z.string().trim().min(1), z.number().int().nonnegative()]).transform(String),
+  /** Optional: when omitted Hermes looks the account up from the API key / the user's wallet address. */
+  accountId: z.union([z.string().trim().min(1), z.number().int().nonnegative()]).transform(String).optional(),
   apiKeyPublic: z.string().trim().min(1).max(256),
   apiKeyPrivate: z.string().trim().min(1).max(512),
 });
 export type PutPerplConnectionRequest = z.input<typeof PutPerplConnectionRequest>;
 
+/** `GET /api/perpl/context`: what onboarding needs from Perpl's `pub/context`. */
+export interface PerplContextDTO {
+  mode: "sim" | "live";
+  /** Collateral token symbol, for example "AUSD". */
+  collateralToken: string;
+  collateralAddress?: string;
+  collateralDecimals: number;
+  /** Minimum to open an exchange account, in collateral units (AUSD). */
+  minAccountOpenAusd: number;
+  /** Minimum single deposit, in collateral units (AUSD). */
+  minDepositAusd: number;
+  markets: { symbol: string; id: number; priceDecimals: number; sizeDecimals: number }[];
+  /** ISO-3166 country codes Perpl blocks. */
+  geoBlock: string[];
+}
+
 // --- report card -------------------------------------------------------------
 
-export type ReportRange = "7d" | "30d" | "all";
-export const ReportRangeSchema = z.enum(["7d", "30d", "all"]);
+export type ReportRange = "24h" | "7d" | "30d" | "all";
+export const ReportRangeSchema = z.enum(["24h", "7d", "30d", "all"]);
 export type Grade = "A" | "B" | "C" | "D" | "F";
 
 export interface HistogramBucket {
@@ -313,6 +396,46 @@ export interface MissedGroup {
   reason: string;
   label: string;
   count: number;
+  /** Epoch ms when the most recent alert of this group was received. */
+  lastAt: number;
+}
+
+/** One part of the report-card grade (DESIGN.md 10.8). */
+export interface GradePart {
+  key: "fillRate" | "slippage" | "speed";
+  label: string;
+  /** Share of the score: 0.4, 0.35, 0.25. */
+  weight: number;
+  /** The raw measurement: fill rate as a fraction 0..1, median slippage in bps, p95 alert-to-fill in ms. null when unmeasured. */
+  measured: number | null;
+  /** Ready to render, for example "91.2%", "4.1 bps", "p95 871 ms". */
+  measuredLabel: string;
+  /** 0..100, one decimal. */
+  score: number;
+}
+
+export interface LatencyBucket {
+  /** Bucket start, epoch ms (aligned to the bucket size in UTC). */
+  atMs: number;
+  count: number;
+  medianMs: number;
+  p95Ms: number;
+}
+
+export interface ReportPrior {
+  since: number;
+  until: number;
+  eligible: number;
+  fillRate: number | null;
+  medianLatencyMs: number | null;
+  p95LatencyMs: number | null;
+  medianSlippageBps: number | null;
+  /** current - prior, ms. Negative = faster than before. null when either side has no data. */
+  medianLatencyDeltaMs: number | null;
+  /** current - prior as a fraction (0.012 = 1.2 percentage points). */
+  fillRateDelta: number | null;
+  /** current - prior, bps. Negative = cheaper. */
+  medianSlippageDeltaBps: number | null;
 }
 
 export interface GradeComponent {
@@ -343,8 +466,15 @@ export interface ReportCard {
     duplicate: number;
     invalid: number;
     inFlight: number;
+    /** Alerts recorded as `dry_run` (strategy in dry-run mode). Not counted anywhere else. */
+    dryRun: number;
+    /**
+     * Alerts that passed every limit and were meant to trade: filled + partially filled + failed + expired approvals.
+     * Blocks, duplicates, dry runs and in-flight alerts are excluded. This is the grade's fill-rate denominator.
+     */
+    eligible: number;
   };
-  /** (filled + partially_filled) / shouldHaveTraded; null when nothing terminal yet. */
+  /** (filled + partially_filled) / eligible; null when nothing is eligible yet. */
   fillRate: number | null;
   latency: {
     count: number;
@@ -354,6 +484,12 @@ export interface ReportCard {
     minMs: number | null;
     maxMs: number | null;
     series: { alertId: string; atMs: number; latencyMs: number }[];
+    /** Size of one `buckets` entry: 24h -> 1 h, 7d -> 6 h, 30d and all -> 1 day. */
+    bucketMs: number;
+    /** Median and p95 per bucket; empty buckets are omitted. */
+    buckets: LatencyBucket[];
+    /** The slowest alert in the range, for the chart annotation. */
+    maxPoint: { at: number; ms: number; alertId: string; note?: string } | null;
   };
   slippage: {
     count: number;
@@ -361,6 +497,8 @@ export interface ReportCard {
     medianBps: number | null;
     p95Bps: number | null;
     worstBps: number | null;
+    /** sum over fills of slippage x size in USD; POSITIVE = cost to the trader, negative = price improvement. */
+    costUsd: number;
     buckets: HistogramBucket[];
     series: { alertId: string; atMs: number; market: string | null; bps: number }[];
   };
@@ -375,16 +513,31 @@ export interface ReportCard {
     worstUsd: number | null;
     daily: { day: string; pnlUsd: number; cumulativeUsd: number }[];
   };
+  /** null when fewer than `gradeMinEligible` eligible alerts exist (see `gradeReason`). */
   grade: Grade | null;
-  /** 0..100, null when there is no data. */
+  /** 0..100 (1 decimal), null when there is no grade. */
   score: number | null;
+  /** Why there is no grade ("Grades start after 20 alerts that pass your limits. 12 so far."), null when graded. */
+  gradeReason: string | null;
+  gradeMinEligible: number;
+  /** The three weighted parts of the score. Empty when there is no grade. */
+  gradeParts: GradePart[];
+  /** One line naming the weakest part, for example "An A starts at 90. The biggest drag is 13 alerts that passed your limits but did not fill." null when there is no grade. */
+  gradeSummary: string | null;
   gradeBreakdown: {
     fillRate: GradeComponent;
     slippage: GradeComponent;
     latency: GradeComponent;
     reliability: GradeComponent;
   };
+  /** The formula in plain English, exactly as the report shows it under "How the grade is computed". */
   gradeExplanation: string;
+  /** Alerts that went through Perpl's pipeline because a human had to approve them (any approval outcome). */
+  approvalGated: number;
+  /** Max slippage the strategy allows, bps (strategy override, else `limits.defaultSlippageBps`). */
+  slippageCapBps: number;
+  /** Same-length window right before this one. null for range "all". */
+  prior: ReportPrior | null;
 }
 
 // --- streaming ---------------------------------------------------------------

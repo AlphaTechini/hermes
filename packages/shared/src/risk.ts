@@ -16,6 +16,10 @@ export const RiskLimits = z.object({
   maxOrdersPerMinute: z.number().int().positive().default(30),
   defaultSlippageBps: z.number().int().nonnegative().default(50),
   paused: z.boolean().default(false),
+  /** Seconds an order above the approval threshold waits in the approvals queue before it expires. */
+  approvalExpirySec: z.number().int().min(10).max(86_400).default(120),
+  /** Epoch ms of the last save, set by the server (ignored on PUT). null/absent before the first save. */
+  updatedAt: z.number().nullable().optional(),
 });
 export type RiskLimits = z.infer<typeof RiskLimits>;
 
