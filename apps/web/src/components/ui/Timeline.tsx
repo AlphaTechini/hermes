@@ -12,7 +12,9 @@ export interface TimelineItem {
   /** Node fill: `final` positive, `blocked` warning, `failed` negative, `skipped` hollow/faint. */
   state?: "done" | "final" | "blocked" | "failed" | "skipped";
   /** Gantt bar as percentages of the total (0 to 100). Omit to draw no bar. */
-  bar?: { left: number; width: number };
+  bar?: { left: number; width: number; /** Bar color for stopped stages (default grey, positive for the final stage). */ tone?: "warning" | "negative" };
+  /** Color of the delta text. */
+  deltaTone?: "positive" | "warning" | "negative";
 }
 
 /**
@@ -34,8 +36,8 @@ export function Timeline({ items, axisTotal, axisMid, className }: { items: Time
               {it.description && <div className="tl-desc">{it.description}</div>}
               <span className="tl-time-m">{it.time}</span>
             </div>
-            <span className="tl-delta">{it.delta ?? ""}</span>
-            <span className="tl-gantt">{it.bar && <b style={{ left: `${it.bar.left}%`, width: `max(2px, ${it.bar.width}%)` }} />}</span>
+            <span className={cn("tl-delta", it.deltaTone === "positive" && "pos", it.deltaTone === "warning" && "warn", it.deltaTone === "negative" && "neg")}>{it.delta ?? ""}</span>
+            <span className="tl-gantt">{it.bar && <b style={{ left: `${it.bar.left}%`, width: `max(2px, ${it.bar.width}%)`, ...(it.bar.tone ? { background: `var(--${it.bar.tone})` } : null) }} />}</span>
           </div>
         ))}
       </div>

@@ -1,0 +1,9 @@
+/* Alert detail inside the Live drawer: the drawer is narrower than the page grid, so stack everything. */
+.alert-drawer-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.alert-drawer-kpis .kpi { border-left: 1px solid var(--border-subtle) !important; border-top: 0 !important; }
+.alert-drawer-kpis .kpi:nth-child(odd) { border-left: 0 !important; }
+.alert-drawer-kpis .kpi:nth-child(n+3) { border-top: 1px solid var(--border-subtle) !important; }
+.alert-drawer-kpis .kpi-sub { white-space: normal; display: block; }
+.alert-view [data-msg-row] { cursor: pointer; }
+.alert-view .msg-raw td { padding: 0 !important; background: var(--surface-sunken); }
+.alert-view .msg-raw .code { border: 0; border-radius: 0; }

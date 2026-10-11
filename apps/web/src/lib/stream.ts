@@ -12,7 +12,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { QueryClient, InfiniteData } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AlertDetail, AlertListResponse, AlertRecord, Approval, PerplConnectionDTO, PerplLinkStatus, StreamEvent, StreamTicket } from "@hermes/shared";
+import type { AccountSummary, AlertDetail, AlertListResponse, AlertRecord, Approval, PerplConnectionDTO, PerplHealthDTO, PerplLinkStatus, StreamEvent, StreamTicket } from "@hermes/shared";
 import { API_BASE, post } from "./api";
 import { qk } from "./queries";
 
@@ -28,7 +28,7 @@ export interface StreamStatus {
   perpl: PerplLinkStatus | null;
 }
 
-const EVENT_TYPES: StreamEvent["type"][] = ["ready", "alert", "order", "fill", "positions", "approval", "perpl", "wallet_action"];
+const EVENT_TYPES: StreamEvent["type"][] = ["ready", "alert", "order", "fill", "positions", "approval", "perpl", "perpl_status", "account", "wallet_action"];
 /** After this many failed attempts the TopBar shows "Offline" (before that: "Reconnecting"). */
 export const OFFLINE_AFTER_ATTEMPTS = 3;
 
@@ -48,6 +48,18 @@ const subscribeStatus = (cb: () => void) => {
 /** Connection state of the live stream. `state === "live"` once the server said `ready`. */
 export function useStreamStatus(): StreamStatus {
   return useSyncExternalStore(subscribeStatus, () => status, () => status);
+}
+
+// Perpl link health (`perpl_status` events): connected, heartbeat age, latency, head block. Null until the first event.
+let perplHealth: PerplHealthDTO | null = null;
+const healthListeners = new Set<() => void>();
+const subscribeHealth = (cb: () => void) => {
+  healthListeners.add(cb);
+  return () => healthListeners.delete(cb);
+};
+/** Latest `perpl_status` health pushed over the stream, or `null` before the first one. */
+export function usePerplHealth(): PerplHealthDTO | null {
+  return useSyncExternalStore(subscribeHealth, () => perplHealth, () => perplHealth);
 }
 
 const eventListeners = new Set<(e: StreamEvent) => void>();
@@ -142,6 +154,14 @@ export function applyStreamEvent(qc: QueryClient, ev: StreamEvent): void {
     case "perpl":
       qc.setQueryData<PerplConnectionDTO>(qk.perpl, (old) => (old ? { ...old, status: ev.status } : old));
       void qc.invalidateQueries({ queryKey: qk.account });
+      return;
+    case "perpl_status":
+      perplHealth = ev.health;
+      healthListeners.forEach((l) => l());
+      qc.setQueryData<PerplConnectionDTO>(qk.perpl, (old) => (old ? { ...old, status: ev.health.status, health: ev.health } : old));
+      return;
+    case "account":
+      qc.setQueryData<AccountSummary>(qk.account, ev.account);
       return;
     case "wallet_action":
       void qc.invalidateQueries({ queryKey: qk.wallet.actions });
