@@ -54,16 +54,18 @@ export interface KpiTileProps {
   icon?: ReactNode;
   /** Show the skeleton instead (label 12, value 24, sub 12 high). Use with `useDelayedFlag`. */
   loading?: boolean;
+  /** Skeleton bar widths `[label, value, sub]` in px. */
+  skeleton?: [number, number, number];
   className?: string;
 }
 
-export function KpiTile({ label, value, unit, sub, mono, size = "md", tone, icon, loading, className }: KpiTileProps) {
+export function KpiTile({ label, value, unit, sub, mono, size = "md", tone, icon, loading, skeleton = [72, 96, 120], className }: KpiTileProps) {
   if (loading) {
     return (
       <div className={cn("kpi", className)}>
-        <Skeleton w={72} h={12} />
-        <Skeleton w={96} h={24} style={{ marginTop: 4 }} />
-        <Skeleton w={120} h={12} />
+        <Skeleton w={skeleton[0]} h={12} />
+        <Skeleton w={skeleton[1]} h={24} style={{ marginTop: 4 }} />
+        <Skeleton w={skeleton[2]} h={12} />
       </div>
     );
   }

@@ -333,9 +333,9 @@ export function ComponentsPage() {
         <Card>
           <CardHeader title="Loading" meta="skeletons keep the final layout" />
           <KpiRow cols={3} style={{ border: 0, borderBottom: "1px solid var(--border-subtle)", borderRadius: 0 }}>
-            <KpiTile loading label="" />
-            <KpiTile loading label="" />
-            <KpiTile loading label="" />
+            <KpiTile loading label="" skeleton={[72, 96, 120]} />
+            <KpiTile loading label="" skeleton={[64, 80, 100]} />
+            <KpiTile loading label="" skeleton={[80, 72, 90]} />
           </KpiRow>
           <SkeletonRows rows={4} />
         </Card>
@@ -364,18 +364,19 @@ export function ComponentsPage() {
 
         {/* ---------------- Toasts ---------------- */}
         <Card>
-          <CardHeader title="Toasts" meta="bottom right · 4 s · stack of 3 max" actions={<Button size="sm" variant="secondary" onClick={() => toast.positive("Limits saved", "They apply from the next alert.")}>Fire one</Button>} />
+          <CardHeader title="Toasts" meta="bottom right · 4 s · stack of 3 max" />
           <CardBody className="col" style={{ gap: 8 }}>
             <ToastView className="gal-static" tone="positive" title="Filled Long BTC 0.050" body="112,048.5 · 1.6 bps · 612 ms" actions={[{ label: "View alert", to: "/live" }]} />
             <ToastView className="gal-static" tone="warning" icon={OctagonX} title="Blocked Long SOL 140.0" body="Over your max position size of $25,000." />
             <ToastView className="gal-static" tone="negative" title="Could not save limits" body="The server did not answer. Your changes are still here." actions={[{ label: "Try again" }]} />
             <ToastView className="gal-static" tone="accent" title="Approval needed" body="Short BTC 0.120 · $13,445 · expires in 2:00" actions={[{ label: "Review", to: "/approvals" }]} />
+            <div><Button size="sm" variant="secondary" onClick={() => toast.positive("Limits saved", "They apply from the next alert.")}>Fire a live toast</Button></div>
           </CardBody>
         </Card>
 
         {/* ---------------- Modal ---------------- */}
         <Card>
-          <CardHeader title="Modal" meta="440 wide · confirm destructive actions" actions={<Button size="sm" variant="secondary" onClick={() => setConfirm(true)}>Open</Button>} />
+          <CardHeader title="Modal" meta="440 wide · confirm destructive actions" />
           <CardBody>
             <div className="stage-box">
               <div className="modal gal-static" role="presentation">

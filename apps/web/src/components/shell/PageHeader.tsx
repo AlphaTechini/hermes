@@ -11,7 +11,7 @@ export interface Crumb {
 export function usePageTitle(title: string): void {
   useEffect(() => {
     const prev = document.title;
-    document.title = `${title} · Hermes`;
+    document.title = title === "Hermes" ? "Hermes" : `${title} · Hermes`;
     return () => {
       document.title = prev;
     };
