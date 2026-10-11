@@ -66,7 +66,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
     ...(opts.approvalTtlMs !== undefined ? { approvalTtlMs: opts.approvalTtlMs } : {}),
   });
   pipeline.start();
-  app.addHook("onClose", async () => pipeline.stop());
+  app.addHook("onClose", async () => {
+    await pipeline.idle(); // let in-flight alerts finish before the DB closes
+    pipeline.stop();
+  });
 
   const verifier: AuthVerifier =
     opts.verifier ??

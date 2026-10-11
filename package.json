@@ -4,6 +4,7 @@
   "private": true,
   "description": "TradingView webhook alerts to Perpl orders, with risk limits and a per-strategy report card.",
   "license": "MIT",
+  "type": "module",
   "packageManager": "pnpm@10.28.0",
   "engines": { "node": ">=22" },
   "scripts": {

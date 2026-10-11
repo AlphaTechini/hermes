@@ -81,6 +81,7 @@ export interface NewAlert {
   rawBody: string;
   status: AlertStatus;
   receivedAtMs: number;
+  createdAt?: number;
 }
 
 export interface AlertPatch {
@@ -556,7 +557,7 @@ export function createRepos(db: Db) {
         raw_body: a.rawBody,
         status: a.status,
         received_at_ms: a.receivedAtMs,
-        created_at: Date.now(),
+        created_at: a.createdAt ?? Date.now(),
       });
       return alerts.get(a.id) as AlertRow;
     },

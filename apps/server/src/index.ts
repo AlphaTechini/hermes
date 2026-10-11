@@ -15,7 +15,7 @@ async function main() {
     }
   }
 
-  const config = loadConfig();
+  const config = loadConfig(process.env, { devKeyFile: true });
   const db = openDb(config.databasePath);
 
   // ---------------------------------------------------------------------------------------------
@@ -29,7 +29,8 @@ async function main() {
   const { app } = await buildApp({ config, db, logger: { level: process.env.LOG_LEVEL ?? "info" } });
 
   for (const w of config.warnings) {
-    app.log.warn(`\n${"!".repeat(78)}\n  WARNING: ${w}\n${"!".repeat(78)}`);
+    const bar = "!".repeat(78);
+    process.stderr.write(`\n${bar}\n  WARNING: ${w}\n${bar}\n\n`);
   }
   app.log.warn(`No Perpl client provider registered (PERPL_MODE=${config.perplMode}): orders will fail with perpl_not_connected.`);
 

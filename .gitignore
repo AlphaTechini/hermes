@@ -13,3 +13,4 @@ data/
 .vite
 *.tsbuildinfo
 # design/screenshots is intentionally kept in git
+.hermes-dev-master-key

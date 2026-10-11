@@ -78,6 +78,7 @@ export class Pipeline {
     for (const a of this.repos.approvals.allPending()) this.armApprovalTimer(a.id, a.expiresAt);
   }
 
+  /** Stop timers and executor subscription. Call `await idle()` first for a graceful drain. */
   stop(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
@@ -115,9 +116,11 @@ export class Pipeline {
   // Entry point
   // -------------------------------------------------------------------------
 
-  /** Fire-and-forget hand-off from ingest. Never throws. */
+  /** Fire-and-forget hand-off from ingest, deferred to the next tick so the HTTP reply goes out first. Never throws. */
   enqueue(alertId: string): void {
-    const p = this.process(alertId).finally(() => this.inflight.delete(p));
+    const p: Promise<void> = new Promise<void>((resolve) => setImmediate(resolve))
+      .then(() => this.process(alertId))
+      .finally(() => this.inflight.delete(p));
     this.inflight.add(p);
   }
 
@@ -126,9 +129,13 @@ export class Pipeline {
       await this.run(alertId);
     } catch (err) {
       this.log.error({ err, alertId }, "pipeline error");
-      this.transition(alertId, "failed", { errorCode: "pipeline_error" }, {
-        message: err instanceof Error ? err.message : String(err),
-      });
+      try {
+        this.transition(alertId, "failed", { errorCode: "pipeline_error" }, {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } catch (err2) {
+        this.log.error({ err: err2, alertId }, "could not record pipeline failure");
+      }
     }
   }
 
@@ -478,7 +485,7 @@ export class Pipeline {
       }
       case "failed": {
         publishOrder({ status: "failed", errorCode: e.code });
-        this.transition(e.alertId, "failed", { errorCode: e.code }, { orderId: e.orderId, message: e.message }, e.atMs);
+        this.transition(e.alertId, "failed", { errorCode: e.code }, { orderId: e.orderId, code: e.code, message: e.message }, e.atMs);
         break;
       }
     }

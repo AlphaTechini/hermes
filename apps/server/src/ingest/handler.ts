@@ -157,8 +157,8 @@ export function createIngest(deps: IngestDeps) {
     });
     pipeline.transition(alertId, "verified", {}, { key: key.startsWith("id:") ? key : "hash" });
 
-    // Hand off after the response is on its way.
-    setImmediate(() => pipeline.enqueue(alertId));
+    // Hand off after the response is on its way (enqueue defers to the next tick).
+    pipeline.enqueue(alertId);
     return { status: 202, body: { alertId } };
   }
 

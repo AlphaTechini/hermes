@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 
 const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
@@ -45,7 +47,15 @@ export interface Config {
   warnings: string[];
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export interface LoadConfigOptions {
+  /**
+   * Development convenience: when HERMES_MASTER_KEY is unset, generate one and keep it in
+   * `<dir of DATABASE_PATH>/.hermes-dev-master-key` so stored secrets survive restarts and the seed script.
+   */
+  devKeyFile?: boolean;
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadConfigOptions = {}): Config {
   const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -61,6 +71,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     masterKey = Buffer.from(e.HERMES_MASTER_KEY, "hex");
   } else if (isProd) {
     throw new Error("HERMES_MASTER_KEY is required in production (64 hex chars).");
+  } else if (options.devKeyFile && e.DATABASE_PATH !== ":memory:") {
+    const file = join(dirname(e.DATABASE_PATH), ".hermes-dev-master-key");
+    if (existsSync(file) && /^[0-9a-fA-F]{64}$/.test(readFileSync(file, "utf8").trim())) {
+      masterKey = Buffer.from(readFileSync(file, "utf8").trim(), "hex");
+    } else {
+      masterKey = randomBytes(32);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, masterKey.toString("hex"), { mode: 0o600 });
+    }
+    warnings.push(
+      `HERMES_MASTER_KEY is not set: using a DEV key persisted at ${file}. Fine for local development; ` +
+        "set HERMES_MASTER_KEY (64 hex chars) for anything else.",
+    );
   } else {
     masterKey = randomBytes(32);
     ephemeral = true;
