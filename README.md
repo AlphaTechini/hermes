@@ -70,7 +70,7 @@ Every step writes a row to the `alert_events` table with a millisecond timestamp
 
 ### Main track: Onchain Finance & Trading
 
-- **Product quality and completeness.** Sign-in, onboarding, live alert stream with a per-alert lifecycle bar, strategies with copyable webhook URL and secret, risk limits, approval queue, wallet and keys page, report card, "Send test alert" button. 440 automated tests.
+- **Product quality and completeness.** Sign-in, onboarding, live alert stream with a per-alert lifecycle bar, strategies with copyable webhook URL and secret, risk limits, approval queue, wallet and keys page, report card, "Send test alert" button. 503 automated tests.
 - **Technical excellence.** A Perpl client package with its own protocol simulator and fault injection, an idempotent order state machine, encrypted secrets, a pure risk engine, server-sent events for live updates.
 - **Monad integration.** Orders are filled by Perpl's on-chain exchange on Monad testnet, and Hermes records the transaction hash of every fill. Account setup runs through the user's Monad wallet. See [Why Monad](#why-monad).
 - **Track fit.** Perpl is an on-chain perpetuals exchange. Hermes makes it usable from the tool most traders already use for signals.
@@ -95,7 +95,7 @@ Every step writes a row to the `alert_events` table with a millisecond timestamp
 
 ### Perpl: Best Analytics / Risk Tool (report card)
 
-Per strategy: alert price against fill price (slippage in bps, with a histogram), alert-to-fill latency (median and p95, over time), fill rate, realised PnL with slippage and fee cost, every blocked or missed alert grouped by reason, and a 0 to 100 grade with a published formula (fill rate 35, slippage 25, latency 20, reliability 20). Code: [`apps/server/src/reports/report-card.ts`](apps/server/src/reports/report-card.ts), screen: [`apps/web/src/pages/report/`](apps/web/src/pages/report/). The Risk limits page and the daily loss stop cover the risk-tool side.
+Per strategy: alert price against fill price (slippage in bps, with a histogram), alert-to-fill latency (median and p95, over time), fill rate, realised PnL with slippage and fee cost, every blocked or missed alert grouped by reason, and a 0 to 100 grade with a published formula (fill rate 40, slippage 35, speed 25; alerts your own limits blocked never lower it, and approval wait time is excluded from speed). Code: [`apps/server/src/reports/report-card.ts`](apps/server/src/reports/report-card.ts), screen: [`apps/web/src/pages/report/`](apps/web/src/pages/report/). The Risk limits page and the daily loss stop cover the risk-tool side.
 
 ## Why Monad
 
@@ -351,13 +351,13 @@ pnpm typecheck
 pnpm lint
 ```
 
-Last measured: 440 tests passing. Typecheck and lint were clean in all four workspaces at that run.
+Last measured: 503 tests passing. Typecheck and lint were clean in all four workspaces at that run.
 
 | Package | Test files | Tests | What is covered |
 |---|---|---|---|
 | `packages/perpl` | 9 | 211 | Ed25519 signing against third-party vectors, protocol parsing, scaling, every branch of the `rq` retry state machine (fake timers and fake socket), the simulator's protocol rules, and the full client against the simulator with injected faults (dropped status, disconnect before status, rejection, heartbeat gap, partial fill) |
-| `apps/server` | 10 | 152 | Webhook auth, schema and dedupe, the risk engine, the pipeline and approval flow, the Perpl executor, end to end alert-to-fill against the simulator, report card maths, Privy policy mirror and wallet API, crypto, REST API |
-| `apps/web` | 4 | 48 | Formatting, alert lifecycle view model, SSE stream handling, UI primitives |
+| `apps/server` | 13 | 187 | Webhook auth, schema and dedupe, the risk engine, the pipeline and approval flow, the Perpl executor, end to end alert-to-fill against the simulator, report card maths, Privy policy mirror and wallet API, crypto, REST API, stored risk checks and Perpl frames, markets endpoint |
+| `apps/web` | 8 | 76 | Formatting, alert lifecycle view model, SSE stream handling, UI primitives, wallet and key error flows, a guard against CSS classes colliding with Tailwind utilities |
 | `packages/shared` | 1 | 29 | Alert parsing, ticker normalisation, intent resolution |
 
 ## Honest limitations
