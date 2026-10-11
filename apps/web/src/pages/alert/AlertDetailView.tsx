@@ -60,7 +60,7 @@ import {
   orNA,
   slippageTone,
 } from "../../lib/format";
-import { useAccount, useAlert, useLimits, useReport, useSendTestAlert } from "../../lib/queries";
+import { useAccount, useAlert, useLimits, useReport, useSendTestAlert, useSimulatedPerpl } from "../../lib/queries";
 import { buildTimeline } from "./timeline";
 import { narrativeFor } from "./narrative";
 import { orderFrame, perplMessages } from "./frame";
@@ -143,6 +143,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
   const toast = useToast();
   const { copy, copied } = useCopy();
   const replay = useSendTestAlert();
+  const simulated = useSimulatedPerpl();
   const report = useReport(d.strategyId, "7d");
 
   const kind = variantOf(d);
@@ -224,7 +225,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
           Replay as test alert
         </Button>
       )}
-      {fillTx && (
+      {fillTx && !simulated && (
         <a className={buttonClasses({ size: "sm" })} href={`https://testnet.monadexplorer.com/tx/${fillTx}`} target="_blank" rel="noopener">
           <ExternalLink aria-hidden />
           Fill on explorer
@@ -387,7 +388,7 @@ function Loaded({ d, variant, limits, account, onNavigate }: LoadedProps) {
         <CardBody style={{ paddingTop: 4, paddingBottom: 4 }}>
           <KeyValue
             items={[
-              ...d.fills.map((f, i): [ReactNode, ReactNode] => [d.fills.length > 1 ? `Fill tx ${i + 1}` : "Fill tx", f.txHash ? <ExplorerLink key={f.id} value={f.txHash} /> : <span className="faint">n/a</span>]),
+              ...d.fills.map((f, i): [ReactNode, ReactNode] => [d.fills.length > 1 ? `Fill tx ${i + 1}` : "Fill tx", f.txHash ? <ExplorerLink key={f.id} value={f.txHash} simulated={simulated} /> : <span className="faint">n/a</span>]),
               ...(d.fills.length && d.fills[d.fills.length - 1]?.block != null ? ([["Fill block", <span className="mono" key="fb">{formatBlock(d.fills[d.fills.length - 1]!.block)}</span>]] as [ReactNode, ReactNode][]) : []),
               ["Perpl order", <span className="mono" key="po">{order?.perplOrderId ? Number(order.perplOrderId).toLocaleString("en-US") : <span className="faint">n/a</span>}</span>],
               ["Request id (rq)", <span className="mono" key="rq">{order?.rq != null ? order.rq.toLocaleString("en-US") : <span className="faint">n/a</span>}</span>],

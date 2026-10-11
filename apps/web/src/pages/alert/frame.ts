@@ -88,14 +88,14 @@ function commentFor(key: string, value: unknown, f: Record<string, unknown>, ord
       return n !== null ? (ORDER_FLAG[n] ?? null) : null;
     case "p": {
       // Scaled by the market's price decimals. 0 means no limit price: a market order, bounded by `ms`.
-      if (n === 0) return num(f.ms) !== null ? `no limit price, bounded by ms` : "no limit price";
+      if (n === 0) return num(f.ms) !== null ? "market, bounded by ms" : "no limit price";
       const sym = symbolOfMarketId(f.mkt) ?? order.market;
       return n !== null ? `limit ${formatPrice(n / 10 ** priceDecimals(sym), sym)}` : null;
     }
     case "s": {
       const k = lotDecimals(order.size, n);
       const sym = symbolOfMarketId(f.mkt) ?? order.market;
-      return n !== null && k !== null ? `lots, ${formatSize(n / 10 ** k, sym)} ${sym ?? ""}`.trim() : "lots";
+      return n !== null && k !== null ? `${formatSize(n / 10 ** k, sym)} ${sym ?? ""}`.trim() : "lots";
     }
     case "lv":
       return n !== null ? `${(n / 100).toFixed(2)}x` : null;

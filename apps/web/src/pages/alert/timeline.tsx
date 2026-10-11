@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { AlertDetail, AlertEventDTO, Fill } from "@hermes/shared";
 import { alertPipeline, STAGE_NAMES } from "../../lib/alert-view";
 import type { TimelineItem } from "../../components/ui";
-import { formatBlock, formatClock, formatCountdown, formatDeltaMs, formatMs, formatPrice, formatSize, formatUsd } from "../../lib/format";
+import { formatBlock, formatClock, formatCountdown, formatDeltaMs, formatMs, formatPrice, formatSize, formatUsd, shortId } from "../../lib/format";
 import { riskChecks, type ChecksResult } from "./derive";
 import { placedInfo } from "./frame";
 
@@ -159,7 +159,7 @@ export function buildTimeline(d: AlertDetail, checksIn?: ChecksResult): BuiltTim
       }
       case "duplicate":
         stop = "blocked";
-        rows.push({ at: e.atMs, title: <span className="warn">Ignored as a duplicate</span>, state: "blocked", description: <>Same alert id as <M>{String(det.duplicateOf ?? "an earlier alert")}</M>. Hermes acts on each id once.</> });
+        rows.push({ at: e.atMs, title: <span className="warn">Ignored as a duplicate</span>, state: "blocked", description: <>Same alert id as <M>{typeof det.duplicateOf === "string" ? shortId(det.duplicateOf) : "an earlier alert"}</M>. Hermes acts on each id once.</> });
         break;
       case "invalid": {
         stop = "failed";

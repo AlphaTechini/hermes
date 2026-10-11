@@ -8,8 +8,8 @@ import { Badge, Button, Card, CardHeader, Countdown, DataTable, EmptyState, Mark
 import { errorMessage, post } from "../../lib/api";
 import { alertSide } from "../../lib/alert-view";
 import { cn } from "../../lib/cn";
-import { formatBps, formatCountdown, formatPrice, formatSize, formatTableTime, formatUsd, orNA } from "../../lib/format";
-import { qk, useAlert, useAlerts, useApprovals, useLimits, usePositions } from "../../lib/queries";
+import { formatBps, formatCountdown, formatLeverageX, formatPrice, formatSize, formatTableTime, formatUsd, orNA } from "../../lib/format";
+import { qk, useAlert, useAlerts, useApprovals, useLimits, useMarkets } from "../../lib/queries";
 import { PAGE } from "../../lib/routes";
 import { useNow } from "../live/hooks";
 
@@ -167,7 +167,7 @@ export function ApprovalsPage() {
 function ApprovalCard({ approval: a, now, busy, onDecide }: { approval: Approval; now: number; busy: boolean; onDecide: (d: Decision, label: string) => void }) {
   const detail = useAlert(a.alertId);
   const limits = useLimits();
-  const positions = usePositions();
+  const markets = useMarkets();
   const d = detail.data;
   const parsed = (d?.parsed ?? {}) as { size?: number; leverage?: number; maxSlippageBps?: number };
   const market = a.market ?? d?.market ?? null;
@@ -179,7 +179,9 @@ function ApprovalCard({ approval: a, now, busy, onDecide }: { approval: Approval
   // Buying (open long, close short) pays up to the cap above the alert price; selling gets down to the cap below it.
   const buy = (a.kind === "open" && a.side === "long") || (a.kind === "close" && a.side === "short");
   const limitPrice = price !== null && slip !== null ? price * (1 + (buy ? 1 : -1) * (slip / 1e4)) : null;
-  const mark = positions.data?.find((p) => p.market === market)?.markPrice ?? null;
+  // The mark comes from market data, not from a position: it exists whether or not one is open.
+  const mark = markets.data?.find((m) => m.symbol === market)?.markPrice ?? null;
+  const markLoading = markets.isLoading;
   // Positive = worse for the trader.
   const moveBps = mark !== null && price ? ((mark - price) / price) * 1e4 * (buy ? 1 : -1) : null;
 
@@ -187,7 +189,9 @@ function ApprovalCard({ approval: a, now, busy, onDecide }: { approval: Approval
   const total = Math.max(1, Math.round((a.expiresAt - a.createdAt) / 1000));
   const sizeText = orNA(size, (v) => formatSize(v, market));
   const label = `${sideWord(a)} ${market ?? ""} ${sizeText === "n/a" ? "" : sizeText}`.trim();
-  const levText = parsed.leverage ? `${parsed.leverage.toFixed(1)}x` : "n/a";
+  // Every rule that ran and passed, except the approval threshold this card is about.
+  const otherChecks = (d?.riskChecks ?? []).filter((c) => c.passed === true && c.key !== "approval").length;
+  const levText = parsed.leverage ? formatLeverageX(parsed.leverage) : "n/a";
 
   return (
     <section className="card appr" aria-label={`Approval for ${label}`}>
@@ -221,9 +225,9 @@ function ApprovalCard({ approval: a, now, busy, onDecide }: { approval: Approval
         </div>
         <div>
           <span className="l">Mark now</span>
-          <span className="v">{formatPrice(mark, market)}</span>
+          <span className="v">{markLoading ? <Skeleton w={72} h={14} /> : formatPrice(mark, market)}</span>
           <span className={cn("s", moveBps !== null && moveBps < 0 && "pos", moveBps !== null && moveBps > 5 && "warn")}>
-            {moveBps === null ? "No open position to read it from" : moveBps < 0 ? `${formatBps(Math.abs(moveBps))} better ${buy ? "for a buy" : "for a short"}` : `${formatBps(moveBps)} worse than alert`}
+            {markLoading ? "" : mark === null ? "No mark price from Perpl" : moveBps === null ? "n/a" : moveBps < 0 ? `${formatBps(Math.abs(moveBps))} better for a ${buy ? "long" : "short"}` : `${formatBps(moveBps)} worse than alert`}
           </span>
         </div>
         <div>
@@ -240,7 +244,7 @@ function ApprovalCard({ approval: a, now, busy, onDecide }: { approval: Approval
       <div className="appr-foot">
         <span className="note">
           <CircleCheck className="i-14 pos" aria-hidden />
-          Passed the other 5 checks. Approving sends the order to Perpl at once.
+          {otherChecks > 0 ? `Passed the other ${otherChecks} ${otherChecks === 1 ? "check" : "checks"}.` : "Passed the other checks."} Approving sends the order to Perpl at once.
         </span>
         <Button variant="secondary" kbd="R" disabled={busy} onClick={() => onDecide("reject", label)}>
           Reject

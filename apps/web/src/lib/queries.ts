@@ -115,6 +115,9 @@ export const useMe = () => {
   return useQuery({ queryKey: qk.me, queryFn: () => get<UserDTO>("/api/me"), enabled });
 };
 
+/** True when Perpl runs in the simulator: transaction hashes are not on any chain, so they must not link to the explorer. */
+export const useSimulatedPerpl = (): boolean => useMe().data?.perplMode === "sim";
+
 /** Store the embedded wallet address (and email) on the server user. */
 export const useRegisterWallet = () => {
   const qc = useQueryClient();

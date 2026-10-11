@@ -83,6 +83,10 @@ export function alertPipeline(alert: Pick<AlertRecord, "status" | "events">): Al
     // Hermes limits stop at Checked; a rejected approval stops where the order would have been Sent.
     stopAt(sawApproval ? 3 : 2, "blocked");
   } else if (status === "expired") stopAt(3, "blocked");
+  else if (status === "dry_run") {
+    // Every check ran and passed; the strategy is in dry-run mode, so nothing was sent. An intended end, not a stop.
+    for (let k = 0; k < 6; k++) states[k] = k <= 2 ? "done" : "skipped";
+  }
   else if (status === "failed") stopAt(reached + 1, "failed");
   else if (inFlight) {
     const next = awaitingApproval ? -1 : Math.min(reached + 1, 5);

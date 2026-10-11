@@ -14,9 +14,10 @@ import {
   formatUsd,
   orNA,
   pnlTone,
+  shortHex,
   slippageTone,
 } from "../../lib/format";
-import { useAccount, useAlert, usePositions } from "../../lib/queries";
+import { useAccount, useAlert, usePositions, useSimulatedPerpl } from "../../lib/queries";
 import { Badge, Button, Card, CardFooter, CardHeader, DataTable, EmptyState, ExplorerLink, MarketChip, SideLabel, Skeleton, TextLink, type Column } from "../../components/ui";
 import { useFlash } from "./hooks";
 import { CircleAlert, Layers } from "lucide-react";
@@ -162,6 +163,7 @@ export function FillsCard({
 }) {
   const byAlert = useMemo(() => new Map((alerts ?? []).map((a) => [a.id, a])), [alerts]);
   const rows = (fills ?? []).slice(0, 5);
+  const simulated = useSimulatedPerpl();
 
   const columns: Column<Fill>[] = [
     {
@@ -188,7 +190,7 @@ export function FillsCard({
     },
     { key: "p", header: "Price", numeric: true, cell: (f) => formatPrice(f.price, f.market) },
     { key: "sl", header: "Slippage", numeric: true, cell: (f) => <FillSlippage fill={f} alert={f.alertId ? byAlert.get(f.alertId) : undefined} lookup={alertsSettled} /> },
-    { key: "t", header: "Tx", numeric: true, hideSm: true, cell: (f) => (f.txHash ? <ExplorerLink value={f.txHash} /> : <span className="faint">n/a</span>) },
+    { key: "t", header: "Tx", numeric: true, hideSm: true, cell: (f) => (f.txHash ? simulated ? <span className="mono" title={`${f.txHash}. Simulated, not on the explorer.`}>{shortHex(f.txHash)}</span> : <ExplorerLink value={f.txHash} /> : <span className="faint">n/a</span>) },
   ];
 
   return (

@@ -169,6 +169,7 @@ const PIPES: [string, AlertRecord][] = [
   ["Blocked at checks", fixture("blocked", [["received", 0], ["verified", 4], ["blocked", 5]], { blockReason: "size_above_max" })],
   ["Not filled", fixture("failed", [["received", 0], ["verified", 4], ["risk_checked", 6], ["sent", 16], ["accepted", 192], ["failed", 494]], { errorCode: "timeout" })],
   ["Rejected by Perpl", fixture("failed", [["received", 0], ["verified", 4], ["risk_checked", 6], ["sent", 17], ["failed", 84]], { errorCode: "order_rejected" })],
+  ["Dry run", fixture("dry_run", [["received", 0], ["verified", 4], ["risk_checked", 6], ["dry_run", 7]])],
   ["Ignored", fixture("duplicate", [["received", 0], ["duplicate", 2]])],
   ["Expired", fixture("expired", [["received", 0], ["verified", 4], ["risk_checked", 6], ["pending_approval", 8], ["expired", 120008]])],
   ["Bad secret", fixture("rejected_auth", [["received", 0], ["rejected_auth", 1]])],

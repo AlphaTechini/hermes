@@ -24,11 +24,11 @@ import { Callout } from "../../components/ui/Feedback";
 import { Input } from "../../components/ui/Input";
 import { ExplorerLink, KeyValue } from "../../components/ui/Misc";
 import { SegmentedControl } from "../../components/ui/Segmented";
-import { StatusPill, Tag } from "../../components/ui/Badges";
+import { StatusPill } from "../../components/ui/Badges";
 import { useCopy } from "../../components/ui/hooks";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { errorMessage } from "../../lib/api";
-import { explorerAddressUrl, formatDateTime, formatNumber, shortHex } from "../../lib/format";
+import { explorerAddressUrl, formatDateTime, formatNumber } from "../../lib/format";
 import { usePolicyDemo, usePutPerplConnection, useRunWalletAction } from "../../lib/queries";
 import { useTxBlock, type WalletBalances } from "./hooks";
 import { describeKeyError } from "./key-errors";
@@ -290,15 +290,7 @@ export function PolicyDemo({ disabled, onResult }: { disabled?: boolean; onResul
  * a chain, so they show the hash with a "Simulated" tag and no link instead of a dead explorer page.
  */
 export function TxHash({ hash, simulated }: { hash: string; simulated?: boolean }) {
-  if (!simulated) return <ExplorerLink value={hash} />;
-  return (
-    <span className="row g1" style={{ display: "inline-flex", whiteSpace: "nowrap" }}>
-      <span className="mono" title={hash}>
-        {shortHex(hash)}
-      </span>
-      <Tag title="This transaction was simulated and is not on the explorer">Simulated</Tag>
-    </span>
-  );
+  return <ExplorerLink value={hash} simulated={simulated} />;
 }
 
 // --- wallet action rows -------------------------------------------------------------------

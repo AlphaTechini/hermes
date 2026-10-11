@@ -20,8 +20,24 @@ export function Avatar({ name, size = 24 }: { name: string; size?: number }) {
   );
 }
 
-/** Explorer link: accent text with a 12px `arrow-up-right`, `target=_blank rel=noopener`. Full value in `title`. */
-export function ExplorerLink({ kind = "tx", value, children, className, ...rest }: { kind?: "tx" | "address"; value: string; children?: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children">) {
+/**
+ * Explorer link: accent text with a 12px `arrow-up-right`, `target=_blank rel=noopener`. Full value in `title`.
+ * `simulated`: the transaction never reached a chain (dev wallet, Perpl simulator), so the value is shown as plain mono
+ * text with a "Simulated" tag and no link to a dead explorer page.
+ */
+export function ExplorerLink({ kind = "tx", value, children, className, simulated, ...rest }: { kind?: "tx" | "address"; value: string; simulated?: boolean; children?: ReactNode } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children">) {
+  if (simulated) {
+    return (
+      <span className="row g1" style={{ display: "inline-flex", whiteSpace: "nowrap" }}>
+        <span className={cn("mono", className)} title={value}>
+          {children ?? shortHex(value)}
+        </span>
+        <span className="tag" title="This transaction was simulated and is not on the explorer">
+          Simulated
+        </span>
+      </span>
+    );
+  }
   return (
     <a
       className={cn("ext mono", className)}

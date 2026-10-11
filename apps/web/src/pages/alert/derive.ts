@@ -10,7 +10,7 @@ import { MARKETS, ALERT_ACTIONS, normalizeMarket, resolveIntent, type AlertActio
 import { Hand } from "lucide-react";
 import type { CheckItem } from "../../components/ui";
 import type { SideKind } from "../../lib/alert-view";
-import { formatBps, formatLeverageX, formatPrice, formatUsd } from "../../lib/format";
+import { formatBps, formatLeverageX, formatPrice, formatSize, formatUsd } from "../../lib/format";
 
 export const PERPL_EXCHANGE = "0x1964c32f0be608e7d29302aff5e61268e72080cc";
 
@@ -185,6 +185,14 @@ const clean = (t: string) => t.replace(/-\$/g, "\u2212$");
 /** `25x`, `2.5x`: whole numbers without a decimal, in the callout and in the check row alike. */
 const lev = (v: unknown): string => (isNum(v) ? formatLeverageX(v) : "n/a");
 
+/** `short 0.008` from the server's `short 0.008489801871259571`. */
+function positionText(v: unknown, market: string | null): string {
+  if (typeof v !== "string") return "n/a";
+  const [side, size] = v.split(" ");
+  const n = Number(size);
+  return side && Number.isFinite(n) ? `${side} ${formatSize(n, market)}` : v;
+}
+
 function describeCheck(c: RiskCheckResult, d: AlertDetail): { detail: string; value: string } {
   const v = c.value;
   const l = c.limit;
@@ -204,7 +212,7 @@ function describeCheck(c: RiskCheckResult, d: AlertDetail): { detail: string; va
     case "perpl_connected":
       return { detail: state === "fail" ? "Perpl was not connected" : "Trading socket", value: String(v ?? "n/a") };
     case "position_to_close":
-      return { detail: state === "fail" ? (c.detail ? clean(c.detail) : "No open position to close") : "Open position found", value: typeof v === "string" ? v : "n/a" };
+      return { detail: state === "fail" ? (c.detail ? clean(c.detail) : "No open position to close") : "Open position found", value: positionText(v, d.market) };
     case "pause":
       return { detail: state === "fail" ? "Trading is paused" : "Trading switch", value: String(v ?? "n/a") };
     case "markets": {

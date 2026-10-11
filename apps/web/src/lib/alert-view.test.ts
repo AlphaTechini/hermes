@@ -41,6 +41,15 @@ describe("alertPipeline", () => {
   });
 });
 
+describe("dry run", () => {
+  it("stops after Checked with the rest skipped, and has its own outcome", () => {
+    const a = base({ status: "dry_run", events: [ev("received", 1000), ev("verified", 1004), ev("risk_checked", 1006), ev("dry_run", 1007)] });
+    expect(alertPipeline(a).stages.map((s) => s.state)).toEqual(["done", "done", "done", "skipped", "skipped", "skipped"]);
+    expect(alertPipeline(a).totalMs).toBe(7);
+    expect(alertOutcome(a)).toMatchObject({ kind: "dry_run", label: "Dry run" });
+  });
+});
+
 describe("alertOutcome and side", () => {
   it("maps statuses to pill kinds and sub-lines", () => {
     expect(alertOutcome(base({ status: "filled", avgFillPrice: 112048.5, slippageBps: 1.6 }))).toMatchObject({ kind: "filled", why: "112,048.5 · 1.6 bps" });

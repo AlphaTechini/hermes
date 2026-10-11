@@ -43,13 +43,13 @@ Typed hooks for every endpoint, keys in `qk`. Types come from `@hermes/shared`. 
 | Limits | `useLimits`, `useUpdateLimits`, `useSetPaused` |
 | Strategies | `useStrategies`, `useStrategy(id)`, `useCreateStrategy`, `useUpdateStrategy(id)`, `useToggleStrategy`, `useDeleteStrategy`, `useRevealSecret`, `useRotateSecret`, `useSendTestAlert` |
 | Alerts | `useAlerts({ strategyId, status, limit })`, `useAlertsInfinite`, `useAlert(id)` |
-| Trading | `useOrders`, `useFills`, `usePositions`, `useAccount` |
+| Trading | `useOrders`, `useFills`, `usePositions`, `useAccount`, `useMarkets` (mark price per Perpl market, no position needed; `GET /api/markets`) |
 | Approvals | `useApprovals(status?)`, `usePendingApprovalCount`, `useApprove`, `useReject` |
 | Perpl | `usePerplConnection`, `usePutPerplConnection`, `useDeletePerplConnection` |
 | Reports | `useReport(strategyId, "7d" \| "30d" \| "all")` |
 | Wallet | `useSignerConfig`, `usePrivyWallet`, `useSignerRegistered`, `useWalletActions`, `useRunWalletAction`, `usePolicyDemo` |
 
-Errors are `ApiError` (`status`, `code`, `message`); use `errorMessage(e)` for toasts. `useRevealSecret` is a mutation on purpose: the plaintext secret never enters the query cache.
+List hooks normalise `{ items }`, `null` or error-shaped bodies to arrays (`asList`), so a changing DTO cannot crash a screen. Errors are `ApiError` (`status`, `code`, `message`); use `errorMessage(e)` for toasts. `useRevealSecret` is a mutation on purpose: the plaintext secret never enters the query cache.
 
 ## Live updates: `src/lib/stream.ts`
 
@@ -104,6 +104,8 @@ import { Button, Card, CardHeader, KpiRow, KpiTile, DataTable, StatusPill, Lifec
 | `Skeleton`, `SkeletonRows`, `useDelayedFlag`, `EmptyState`, `Callout`, `Banner`, `Spinner`, `Stepper` | Show skeletons only after 200 ms |
 | `Sparkline`, `LineChart`, `Histogram`, `ChartLegend` | SVG at container pixel width (ResizeObserver) |
 | `KeyValue`, `ChecksList`, `ExplorerLink`, `SectionNum`, `ListItem`, `MarketTile`, `SaveBar`, `GradeBadge`, `GradeScale`, `Avatar`, `Kbd`, `Divider` | |
+
+Render errors: `RouteErrorBoundary` wraps the shell's `<Outlet />` and onboarding, `AppErrorBoundary` wraps all routes (Retry, Back to Live). Component classes must not collide with Tailwind utility names (`styles/styles.test.ts` checks).
 
 Shell (`components/shell`): `PageHeader` (use on every page: `<PageHeader title subtitle actions crumbs />`, sets `document.title`), `AppShell`, `Sidebar`, `TopBar`, `Mark`. Page titles and subtitles are in `lib/routes.ts` (`PAGE.live` and so on).
 
