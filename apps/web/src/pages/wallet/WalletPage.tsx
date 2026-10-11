@@ -1,15 +1,15 @@
-import { CircleCheck, Link2Off, OctagonX, RefreshCw, Wallet } from "lucide-react";
+import { CircleCheck, Link2Off, RefreshCw, ShieldAlert, ShieldCheck, Wallet } from "lucide-react";
 import { useState } from "react";
-import type { PerplLinkStatus, WalletActionDTO } from "@hermes/shared";
+import type { PerplLinkStatus, PolicyDemoResponse, WalletActionDTO } from "@hermes/shared";
 import { useAuth } from "../../auth/context";
 import { useEmbeddedWallet } from "../../auth/hooks";
 import { PageHeader } from "../../components/shell/PageHeader";
-import { Tag } from "../../components/ui/Badges";
+import { StatusPill, Tag } from "../../components/ui/Badges";
 import { Button, ButtonLink } from "../../components/ui/Button";
 import { Card, CardBody, CardFooter, CardHeader } from "../../components/ui/Card";
 import { DataTable } from "../../components/ui/DataTable";
 import { Callout, EmptyState } from "../../components/ui/Feedback";
-import { ChecksList, ExplorerLink, KeyValue } from "../../components/ui/Misc";
+import { ChecksList, KeyValue } from "../../components/ui/Misc";
 import { ConfirmModal, Drawer } from "../../components/ui/Overlay";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useToast } from "../../components/ui/Toast";
@@ -18,8 +18,8 @@ import { errorMessage } from "../../lib/api";
 import { formatDateTime, formatTableTime, formatUsd } from "../../lib/format";
 import { PAGE } from "../../lib/routes";
 import { useDeletePerplConnection, usePerplConnection, usePrivyWallet, useSignerConfig, useWalletActions } from "../../lib/queries";
-import { MON_FAUCET_URL, useWalletBalances } from "./hooks";
-import { ACTION_PILL, AddressField, ApiKeyForm, Balances, PolicyDemo, PolicySummary, SignerAction } from "./parts";
+import { MON_FAUCET_URL, useDepositInfo, useWalletBalances } from "./hooks";
+import { ACTION_PILL, AddressField, ApiKeyForm, Balances, PolicyDemo, PolicySummary, SignerAction, TxHash, type PolicyVariant } from "./parts";
 
 const LINK_PILL: Record<PerplLinkStatus, { tone: "positive" | "warning" | "negative" | "neutral"; label: string; live?: boolean }> = {
   connected: { tone: "positive", label: "Connected" },
@@ -31,7 +31,7 @@ const LINK_PILL: Record<PerplLinkStatus, { tone: "positive" | "warning" | "negat
 function LinkPill({ status }: { status: PerplLinkStatus }) {
   const p = LINK_PILL[status];
   return (
-    <span className="pill outline">
+    <span className="pill pill-outline">
       <span className="hm-dot" data-tone={p.tone === "neutral" ? undefined : p.tone} data-live={p.live ? "true" : undefined} />
       {p.label}
     </span>
@@ -45,13 +45,14 @@ function WalletCard() {
   const privy = usePrivyWallet();
   const cfg = useSignerConfig();
   const bal = useWalletBalances(address, cfg.data?.policy.collateralToken);
+  const dep = useDepositInfo();
   return (
     <Card className="span-7">
       <CardHeader title="Embedded wallet" meta="Created by Privy at sign in" actions={privy.data?.simulated ? <Tag>Simulated</Tag> : undefined} />
       <CardBody>
         <AddressField address={address} />
       </CardBody>
-      <Balances balances={bal.data} loading={bal.isLoading} />
+      <Balances balances={bal.data} loading={bal.isLoading} minDeposit={dep.minOpen} symbol={dep.symbol} onRetry={() => void bal.refetch()} />
       <CardFooter>
         <span>Balances refresh every block.</span>
         <a className="ext xs" href={MON_FAUCET_URL} target="_blank" rel="noopener" style={{ marginLeft: "auto" }}>
@@ -234,23 +235,37 @@ function SignerCard() {
   );
 }
 
+const SANS = { fontFamily: "var(--font-sans)" } as const;
+type Ran = Partial<Record<PolicyVariant, PolicyDemoResponse>>;
+
+/** One refusal row. Before a check runs it is a muted shield and a neutral "Refused" pill; after a run it turns positive. */
+function refusalRow(name: string, detail: string, ran: PolicyDemoResponse | undefined) {
+  if (!ran) return { state: "skip" as const, icon: ShieldCheck, name, detail, value: <span style={SANS}><StatusPill tone="neutral" outline>Refused</StatusPill></span> };
+  if (ran.blocked) {
+    const by = ran.enforcedBy === "privy" ? "Privy" : "the local policy mirror";
+    return { state: "pass" as const, icon: CircleCheck, name, detail: `Refused by ${by}, as expected.`, value: <span style={SANS}><StatusPill tone="positive" outline>Refused</StatusPill></span> };
+  }
+  return { state: "fail" as const, icon: ShieldAlert, name, detail: "Not refused. Check the policy rules in Privy before adding funds.", value: <span style={SANS}><StatusPill tone="negative" outline>Not refused</StatusPill></span> };
+}
+
 function PolicyCheckCard() {
+  const [ran, setRan] = useState<Ran>({});
   return (
     <Card className="span-5">
       <CardHeader title="Policy check" meta="Proof, not a setting" />
       <CardBody className="col g4">
         <p className="secondary" style={{ fontSize: 13, lineHeight: "20px" }}>
-          Hermes sends a transaction the policy must refuse, such as moving MON to another address. If Privy blocks it, no one can move your funds that way.
+          Hermes sends a transaction the policy must refuse, such as moving MON to another address. If Privy refuses it, no one can move your funds that way.
         </p>
-        <PolicyDemo />
+        <PolicyDemo onResult={(variant, res) => setRan((r) => ({ ...r, [variant]: res }))} />
       </CardBody>
       <ChecksList
-        icons={{ pass: CircleCheck, fail: OctagonX, skip: CircleCheck }}
+        icons={{ pass: CircleCheck, fail: ShieldAlert, skip: ShieldCheck }}
         items={[
-          { state: "pass", name: "Sending MON to any address", detail: "Refused. Native transfers are never allowed.", value: "Blocked" },
-          { state: "pass", name: "Approving AUSD to any other spender", detail: "Refused. Only the Perpl exchange may be approved.", value: "Blocked" },
-          { state: "pass", name: "Calling any other contract", detail: "Refused. Only the exchange, AUSD and the faucet are allowed.", value: "Blocked" },
-          { state: "pass", name: "Any transaction after the policy expires", detail: "Refused by Privy before it is signed.", value: "Blocked" },
+          refusalRow("Sending MON to any address", "Native transfers are never allowed.", ran.native_transfer),
+          refusalRow("Approving AUSD to any other spender", "Only the Perpl exchange may be approved.", ran.approve_other_spender),
+          refusalRow("Calling any other contract", "Only the exchange, AUSD and the faucet are allowed.", undefined),
+          refusalRow("Any transaction after the policy expires", "Privy refuses everything once the policy has expired.", undefined),
         ]}
       />
     </Card>
@@ -289,27 +304,19 @@ function ActionsTable() {
               wrap: true,
               cell: (a) => (
                 <div className="col" style={{ gap: 2, overflowWrap: "anywhere", minWidth: 200 }}>
-                  <span>
-                    {a.description}
-                    {a.simulated && (
-                      <>
-                        {" "}
-                        <Tag>Simulated</Tag>
-                      </>
-                    )}
-                  </span>
+                  <span>{a.description}</span>
                   <span className="row g2 md:hidden" style={{ flexWrap: "wrap" }}>
                     {ACTION_PILL[a.status]}
-                    {a.txHash && <ExplorerLink value={a.txHash} />}
+                    {a.txHash && <TxHash hash={a.txHash} simulated={a.simulated} />}
                   </span>
                   {a.error && (
-                    <span style={{ fontSize: 11, lineHeight: "16px", color: a.status === "denied_by_policy" ? "var(--warning-text)" : "var(--negative-text)" }}>{a.error}</span>
+                    <span style={{ fontSize: 11, lineHeight: "16px", color: a.status === "denied_by_policy" ? "var(--text-secondary)" : "var(--negative-text)" }}>{a.error}</span>
                   )}
                 </div>
               ),
             },
             { key: "s", header: "Status", hideSm: true, cell: (a) => ACTION_PILL[a.status] },
-            { key: "h", header: "Transaction", hideSm: true, cell: (a) => (a.txHash ? <ExplorerLink value={a.txHash} /> : <span className="faint">n/a</span>) },
+            { key: "h", header: "Transaction", hideSm: true, cell: (a) => (a.txHash ? <TxHash hash={a.txHash} simulated={a.simulated} /> : <span className="faint">n/a</span>) },
           ]}
         />
       )}
@@ -325,11 +332,11 @@ export function WalletPage() {
   return (
     <>
       <PageHeader {...PAGE.wallet} />
-      <div className="grid-12" style={{ gap: 16, marginBottom: 16 }}>
+      <div className="grid-12" style={{ gap: 16 }}>
         <WalletCard />
         <PerplCard />
       </div>
-      <div className="grid-12" style={{ gap: 16, marginBottom: 16 }}>
+      <div className="grid-12" style={{ gap: 16 }}>
         <SignerCard />
         <PolicyCheckCard />
       </div>

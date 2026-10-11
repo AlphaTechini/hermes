@@ -7,8 +7,8 @@ import { Divider } from "../../components/ui/Misc";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { explorerAddressUrl } from "../../lib/format";
 import { useSignerConfig } from "../../lib/queries";
-import { MON_FAUCET_URL, useWalletBalances } from "../wallet/hooks";
-import { AddressField, Balances, PolicySummary, SignerAction } from "../wallet/parts";
+import { MON_FAUCET_URL, useDepositInfo, useWalletBalances } from "../wallet/hooks";
+import { AddressField, Balances, Disclosure, PolicySummary, SignerAction } from "../wallet/parts";
 import type { StepProps } from "./types";
 
 /** Step 1: the embedded wallet, its balances, faucet links and the Hermes signer under the Privy policy. */
@@ -19,12 +19,13 @@ export function StepWallet({ signerAdded, keyDone, go }: StepProps) {
   const address = wallet.address ?? user?.walletAddress ?? null;
   const cfg = useSignerConfig();
   const bal = useWalletBalances(address, cfg.data?.policy.collateralToken);
+  const dep = useDepositInfo();
 
   return (
     <>
       <div>
         <h2>Your wallet is ready</h2>
-        <p className="lead">Privy created this wallet when you signed in. Hermes uses it to open your Perpl account and make deposits. It needs a little MON for gas and test AUSD to deposit.</p>
+        <p className="lead">Privy created this wallet when you signed in. Hermes uses it to open your Perpl account and make deposits. It needs a little MON for gas and test {dep.symbol} to deposit.</p>
       </div>
 
       <Card>
@@ -32,7 +33,7 @@ export function StepWallet({ signerAdded, keyDone, go }: StepProps) {
           <AddressField address={address} />
         </CardBody>
         <Divider />
-        <Balances balances={bal.data} loading={bal.isLoading} />
+        <Balances balances={bal.data} loading={bal.isLoading} minDeposit={dep.minOpen} symbol={dep.symbol} onRetry={() => void bal.refetch()} />
       </Card>
 
       <Card>
@@ -55,7 +56,7 @@ export function StepWallet({ signerAdded, keyDone, go }: StepProps) {
             <Coins aria-hidden />
             <div>
               <div className="n" style={{ color: "var(--text)" }}>
-                Test AUSD
+                Test {dep.symbol}
               </div>
               <div className="d">Agora faucet. One request per minute, shared by everyone. Hermes can request it for you in the next step.</div>
             </div>
@@ -77,7 +78,9 @@ export function StepWallet({ signerAdded, keyDone, go }: StepProps) {
         </CardBody>
         <Divider />
         <CardBody>
-          {cfg.data ? <PolicySummary policy={cfg.data.policy} mode={cfg.data.mode} /> : <Skeleton h={120} />}
+          <Disclosure id="ob-policy" label="See the policy">
+            {cfg.data ? <PolicySummary policy={cfg.data.policy} mode={cfg.data.mode} /> : <Skeleton h={120} />}
+          </Disclosure>
         </CardBody>
       </Card>
 

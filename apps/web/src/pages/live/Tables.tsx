@@ -16,10 +16,10 @@ import {
   pnlTone,
   slippageTone,
 } from "../../lib/format";
-import { useAccount, usePositions } from "../../lib/queries";
-import { Badge, Card, CardFooter, CardHeader, DataTable, EmptyState, ExplorerLink, MarketChip, SideLabel, TextLink, type Column } from "../../components/ui";
+import { useAccount, useAlert, usePositions } from "../../lib/queries";
+import { Badge, Button, Card, CardFooter, CardHeader, DataTable, EmptyState, ExplorerLink, MarketChip, SideLabel, Skeleton, TextLink, type Column } from "../../components/ui";
 import { useFlash } from "./hooks";
-import { Layers } from "lucide-react";
+import { CircleAlert, Layers } from "lucide-react";
 
 /** A number that flashes green or red for 900 ms when it moves. */
 function Flash({ value, children, className }: { value: number | null | undefined; children: React.ReactNode; className?: string }) {
@@ -27,10 +27,17 @@ function Flash({ value, children, className }: { value: number | null | undefine
   return <span className={cn(flash, className)}>{children}</span>;
 }
 
+/** A figure in a card footer: an inline skeleton bar while the first read is in flight. */
+function FootValue({ loading, children }: { loading: boolean; children: React.ReactNode }) {
+  return loading ? <Skeleton w={40} h={12} style={{ display: "inline-block", verticalAlign: "middle" }} /> : <span className="mono secondary">{children}</span>;
+}
+
 export function PositionsCard({ orders, className }: { orders: Order[] | undefined; className?: string }) {
   const positions = usePositions();
   const account = useAccount();
   const list = positions.data ?? [];
+  const posLoading = positions.isLoading;
+  const posFailed = positions.isError && !positions.data;
   const upnl = list.reduce((a, p) => a + p.upnl, 0);
 
   // Position leverage is not on the position DTO: take it from the newest opening order for that market.
@@ -44,6 +51,7 @@ export function PositionsCard({ orders, className }: { orders: Order[] | undefin
 
   const acc = account.data;
   const margin = acc ? (acc.marginUsedUsd ?? (acc.live ? Math.max(0, acc.equityUsd - acc.availableUsd) : null)) : null;
+  const accLoading = account.isLoading;
 
   const columns: Column<Position>[] = [
     { key: "m", header: "Market", cell: (p) => <MarketChip market={p.market} /> },
@@ -76,11 +84,11 @@ export function PositionsCard({ orders, className }: { orders: Order[] | undefin
       <CardHeader
         title={
           <>
-            Open positions <Badge mono>{list.length}</Badge>
+            Open positions {!posLoading && !posFailed && <Badge mono>{list.length}</Badge>}
           </>
         }
         meta={
-          list.length > 0 && (
+          !posLoading && !posFailed && list.length > 0 && (
             <>
               Unrealized <span className={cn("mono", tone === "positive" && "pos", tone === "negative" && "neg")}>{formatSignedUsd(upnl)}</span>
             </>
@@ -92,8 +100,15 @@ export function PositionsCard({ orders, className }: { orders: Order[] | undefin
         columns={columns}
         rows={list}
         rowKey={(p) => `${p.market}:${p.side}`}
-        loading={positions.isLoading}
+        loading={posLoading}
         skeletonRows={3}
+        error={
+          posFailed ? (
+            <EmptyState icon={CircleAlert} tone="negative" compact title="Could not load positions" actions={<Button size="sm" variant="secondary" onClick={() => void positions.refetch()}>Retry</Button>}>
+              Hermes did not respond. Your positions on Perpl are not affected.
+            </EmptyState>
+          ) : undefined
+        }
         empty={
           <EmptyState icon={Layers} compact title="No open positions">
             Positions opened by your alerts show here.
@@ -102,15 +117,49 @@ export function PositionsCard({ orders, className }: { orders: Order[] | undefin
       />
       <CardFooter>
         <span>
-          Margin used <span className="mono secondary">{orNA(margin, (v) => formatUsd(v))}</span> of <span className="mono secondary">{orNA(acc?.equityUsd, (v) => formatUsd(v))}</span> equity
+          Margin used <FootValue loading={accLoading}>{orNA(margin, (v) => formatUsd(v))}</FootValue> of <FootValue loading={accLoading}>{orNA(acc?.equityUsd, (v) => formatUsd(v))}</FootValue> equity
         </span>
-        <span className="mono">{acc?.accountId ? `Perpl account #${acc.accountId}` : "Perpl account n/a"}</span>
+        {accLoading ? <Skeleton w={96} h={12} /> : <span className="mono">{acc?.accountId ? `Perpl account #${acc.accountId}` : "Perpl account n/a"}</span>}
       </CardFooter>
     </Card>
   );
 }
 
-export function FillsCard({ fills, alerts, className }: { fills: Fill[] | undefined; alerts: AlertRecord[] | undefined; className?: string }) {
+/**
+ * Slippage of one fill against the price of the alert that caused it. The alert normally comes from the list already
+ * loaded on the page; when it is not there (the list failed, or the alert is older than it) it is read on its own, so
+ * this column does not depend on the alerts list.
+ */
+function FillSlippage({ fill: f, alert, lookup }: { fill: Fill; alert: AlertRecord | undefined; lookup: boolean }) {
+  const own = useAlert(alert || !lookup || !f.alertId ? undefined : f.alertId);
+  const a = alert ?? own.data;
+  const raw = a?.alertPrice && f.side && f.kind ? slippageBpsFor(a.alertPrice, f.price, f.side, f.kind) : (a?.slippageBps ?? null);
+  const bps = raw !== null && Number.isFinite(raw) ? raw : null;
+  if (bps === null) return own.isLoading ? <Skeleton w={40} h={12} style={{ marginLeft: "auto" }} /> : <span className="faint">n/a</span>;
+  const t = slippageTone(bps);
+  return (
+    <span className={cn(t === "better" && "pos", t === "warning" && "warn")} title={t === "better" ? SLIPPAGE_BETTER_TITLE(bps) : undefined}>
+      {formatBps(bps)}
+    </span>
+  );
+}
+
+export function FillsCard({
+  fills,
+  alerts,
+  alertsSettled,
+  failed,
+  onRetry,
+  className,
+}: {
+  fills: Fill[] | undefined;
+  alerts: AlertRecord[] | undefined;
+  /** The alerts list finished (loaded or failed): fills whose alert is not in it may look it up on their own. */
+  alertsSettled: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
+  className?: string;
+}) {
   const byAlert = useMemo(() => new Map((alerts ?? []).map((a) => [a.id, a])), [alerts]);
   const rows = (fills ?? []).slice(0, 5);
 
@@ -138,23 +187,7 @@ export function FillsCard({ fills, alerts, className }: { fills: Fill[] | undefi
       },
     },
     { key: "p", header: "Price", numeric: true, cell: (f) => formatPrice(f.price, f.market) },
-    {
-      key: "sl",
-      header: "Slippage",
-      numeric: true,
-      cell: (f) => {
-        const a = f.alertId ? byAlert.get(f.alertId) : undefined;
-        const raw = a?.alertPrice && f.side && f.kind ? slippageBpsFor(a.alertPrice, f.price, f.side, f.kind) : (a?.slippageBps ?? null);
-        const bps = raw !== null && Number.isFinite(raw) ? raw : null;
-        if (bps === null) return <span className="faint">n/a</span>;
-        const t = slippageTone(bps);
-        return (
-          <span className={cn(t === "better" && "pos", t === "warning" && "warn")} title={t === "better" ? SLIPPAGE_BETTER_TITLE(bps) : undefined}>
-            {formatBps(bps)}
-          </span>
-        );
-      },
-    },
+    { key: "sl", header: "Slippage", numeric: true, cell: (f) => <FillSlippage fill={f} alert={f.alertId ? byAlert.get(f.alertId) : undefined} lookup={alertsSettled} /> },
     { key: "t", header: "Tx", numeric: true, hideSm: true, cell: (f) => (f.txHash ? <ExplorerLink value={f.txHash} /> : <span className="faint">n/a</span>) },
   ];
 
@@ -167,8 +200,15 @@ export function FillsCard({ fills, alerts, className }: { fills: Fill[] | undefi
         columns={columns}
         rows={rows}
         rowKey={(f) => f.id}
-        loading={fills === undefined}
+        loading={fills === undefined && !failed}
         skeletonRows={4}
+        error={
+          failed && fills === undefined ? (
+            <EmptyState icon={CircleAlert} tone="negative" compact title="Could not load fills" actions={onRetry ? <Button size="sm" variant="secondary" onClick={onRetry}>Retry</Button> : undefined}>
+              Hermes did not respond. Your fills on Perpl are not affected.
+            </EmptyState>
+          ) : undefined
+        }
         empty={
           <EmptyState icon={Layers} compact title="No fills yet">
             Fills from your alerts show here with a link to the transaction.

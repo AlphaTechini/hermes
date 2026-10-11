@@ -9,6 +9,7 @@ import { useStreamConnection, useStreamEvents, useStreamStatus } from "../../lib
 import { Banner } from "../ui/Feedback";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
+import { RouteErrorBoundary } from "./ErrorBoundary";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -25,8 +26,9 @@ function SystemBanners() {
   if (!enabled) return null;
   const l = limits.data;
   const a = account.data;
-  const today = a ? a.realizedPnlTodayUsd + a.unrealizedPnlUsd : 0;
-  const stopHit = Boolean(l && l.dailyLossStopUsd > 0 && -today >= l.dailyLossStopUsd);
+  // The server's own number, the one the risk gate evaluates: realised + unrealised today, and how much of the stop is used.
+  const used = a?.lossStopUsedUsd ?? (a ? Math.max(0, -(a.realizedPnlTodayUsd + a.unrealizedPnlUsd)) : 0);
+  const stopHit = Boolean(l && l.dailyLossStopUsd > 0 && used >= l.dailyLossStopUsd);
   const p = perpl.data;
 
   return (
@@ -113,33 +115,79 @@ export function AppShell() {
   const { pathname } = useLocation();
   const [navOpen, setNavOpen] = useState(false);
   const stream = useStreamStatus();
+  const sidebarRef = useRef<HTMLElement | null>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  const navigated = useRef(false);
   useStreamConnection(enabled);
 
-  useEffect(() => setNavOpen(false), [pathname]);
+  const open = useCallback(() => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setNavOpen(true);
+  }, []);
+  const close = useCallback(() => setNavOpen(false), []);
+
+  useEffect(() => {
+    if (document.body.classList.contains("nav-open")) navigated.current = true;
+    setNavOpen(false);
+  }, [pathname]);
   useEffect(() => {
     document.body.classList.toggle("nav-open", navOpen);
     return () => document.body.classList.remove("nav-open");
   }, [navOpen]);
-  const close = useCallback(() => setNavOpen(false), []);
 
+  // Mobile nav drawer (< 768): focus moves into it, Tab stays inside, Escape closes, focus goes back to the opener.
   useEffect(() => {
     if (!navOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    const side = sidebarRef.current;
+    const focusables = () => Array.from(side?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? []).filter((el) => el.offsetParent !== null);
+    (side?.querySelector<HTMLElement>('.nav-item[aria-current="page"]') ?? focusables()[0])?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+      } else if (e.key === "Tab") {
+        const items = focusables();
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!first || !last) return;
+        if (!side?.contains(document.activeElement)) {
+          e.preventDefault();
+          first.focus();
+        } else if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      // Closed by choosing a page: focus the new page. Closed otherwise: give focus back to what opened the drawer.
+      const back = navigated.current ? document.getElementById("main") : opener.current;
+      navigated.current = false;
+      opener.current = null;
+      if (back && document.contains(back)) back.focus({ preventScroll: true });
+    };
   }, [navOpen, close]);
 
   const stale = enabled && stream.state === "offline";
 
   return (
     <div className="app">
-      <Sidebar />
+      <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>
+        Skip to content
+      </a>
+      <Sidebar ref={sidebarRef} onClose={close} />
       <div className="nav-scrim" onClick={close} />
       <div className="main">
-        <TopBar onOpenNav={() => setNavOpen(true)} />
+        <TopBar onOpenNav={open} />
         <SystemBanners />
-        <main className={stale ? "content is-stale" : "content"} id="main">
-          <Outlet />
+        <main className={stale ? "content is-stale" : "content"} id="main" tabIndex={-1}>
+          <RouteErrorBoundary>
+            <Outlet />
+          </RouteErrorBoundary>
         </main>
       </div>
       <StreamToasts />

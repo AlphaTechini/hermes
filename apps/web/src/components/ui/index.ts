@@ -25,4 +25,4 @@ export * from "./Timeline";
 export * from "./Toast";
 export * from "./Toggle";
 export * from "./Tooltip";
-export { useCopy, useContainerWidth, useDelayedFlag, useDialog, useOutsideClick } from "./hooks";
+export { useCopy, useContainerWidth, useDelayedFlag, useDialog, useMediaQuery, useOutsideClick } from "./hooks";

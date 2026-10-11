@@ -32,6 +32,23 @@ export function LifecyclePipeline({ stages, size = "row", showLabels, className,
   const prev = useRef<StageState[] | null>(null);
   const [filled, setFilled] = useState<Record<number, true>>({});
 
+  // The fill plays once. Clear the flag when it ends (or after 400 ms, if the animation never runs), so a remount or a
+  // later render does not replay it (DESIGN.md 6.1: "for one render").
+  const clear = (k: number) =>
+    setFilled((f) => {
+      if (!f[k]) return f;
+      const n = { ...f };
+      delete n[k];
+      return n;
+    });
+  useEffect(() => {
+    const keys = Object.keys(filled).map(Number);
+    if (keys.length === 0) return;
+    const t = setTimeout(() => keys.forEach(clear), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filled]);
+
   useEffect(() => {
     const before = prev.current;
     const next = stages.map((s) => s.state);
@@ -54,7 +71,7 @@ export function LifecyclePipeline({ stages, size = "row", showLabels, className,
       aria-label={stages.map((s, k) => `${STAGE_NAMES[k]} ${s.state}${s.label && s.label !== "…" ? ` ${s.label}` : ""}`).join(", ")}
     >
       {stages.map((s, k) => (
-        <div key={k} className="hm-pipe__stage" data-state={s.state} data-animate={filled[k] ? "fill" : undefined}>
+        <div key={k} className="hm-pipe__stage" data-state={s.state} data-animate={filled[k] ? "fill" : undefined} onAnimationEnd={() => clear(k)}>
           <span className="hm-pipe__seg" />
           {labels && <span className="hm-pipe__label">{STAGE_NAMES[k]}</span>}
           <span className="hm-pipe__ms">{s.label ?? ""}</span>

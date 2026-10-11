@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, CircleCheck, Zap } from "lucide-react";
+import { Bell, CircleCheck, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CodeBlock } from "../../components/ui/CodeBlock";
 import { LifecyclePipeline, type PipelineStageInput } from "../../components/ui/LifecyclePipeline";
@@ -72,9 +72,9 @@ export function RelayCard() {
           <div className="relay-lbl">
             <CircleCheck className="i-12 pos" aria-hidden />
             Perpl fills
-            <span className="mono row" style={{ marginLeft: "auto", gap: 4, color: "var(--accent-text)" }} title="Example transaction">
+            <span className="mono row" style={{ marginLeft: "auto", gap: 6, color: "var(--text-muted)" }} title="An example hash, not a real transaction">
               0x8f3a…e21c
-              <ArrowUpRight className="i-12" aria-hidden />
+              <span className="tag">Example</span>
             </span>
           </div>
           <div className="relay-result" style={{ opacity: done ? 1 : 0.35 }}>

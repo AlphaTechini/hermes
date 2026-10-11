@@ -1,11 +1,10 @@
 import { CirclePause, Menu, Moon, Sun } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { PerplConnectionDTO, PerplHealthDTO } from "@hermes/shared";
 import { get } from "../../lib/api";
-import { useHeadBlock } from "../../lib/chain";
-import { formatBlock, formatMs, formatSignedUsd, formatUsd, orNA, pnlTone } from "../../lib/format";
+import { formatBlock, formatMs, formatSignedUsd, formatUsd, pnlTone } from "../../lib/format";
 import { qk, useAccount, useLimits, useSetPaused } from "../../lib/queries";
 import { OFFLINE_AFTER_ATTEMPTS, usePerplHealth, useStreamStatus } from "../../lib/stream";
 import { useTheme } from "../../lib/theme";
@@ -13,6 +12,7 @@ import { cn } from "../../lib/cn";
 import { useAuthEnabled } from "../../auth/context";
 import { Button, IconButton } from "../ui/Button";
 import { Meter } from "../ui/Meter";
+import { Skeleton } from "../ui/Skeleton";
 import { ConfirmModal } from "../ui/Overlay";
 import { Popover } from "../ui/Popover";
 import { Toggle } from "../ui/Toggle";
@@ -58,17 +58,30 @@ function useApiRtt(enabled: boolean) {
   return { rtt, conn: q.data };
 }
 
+const STREAM_WORD: Record<string, string> = { live: "Live", connecting: "Connecting", reconnecting: "Reconnecting", offline: "Offline", idle: "Not started" };
+const LINK_WORD: Record<string, string> = { connected: "Connected", reconnecting: "Reconnecting", disconnected: "Disconnected", not_configured: "Not set up" };
+const SOURCE_WORD: Record<string, string> = { order: "from your recent orders", probe: "timed request to Perpl" };
+
+/** `now` under 2 s, else `4.2 s ago`, `1m ago`. */
+function heartbeatText(ageMs: number | null | undefined): string {
+  if (ageMs === null || ageMs === undefined) return "n/a";
+  if (ageMs < 2000) return "now";
+  if (ageMs < 60_000) return `${(ageMs / 1000).toFixed(1)} s ago`;
+  return `${Math.floor(ageMs / 60_000)}m ago`;
+}
+
 function ConnectionPill({ rtt, perpl, health }: { rtt: number | null; perpl: PerplConnectionDTO | undefined; health: PerplHealthDTO | null }) {
   const stream = useStreamStatus();
   const ref = useRef<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
   const leave = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const streamDown = stream.state === "offline" || stream.state === "reconnecting";
+  const link = health ?? perpl ?? null;
+  // Round trip to Perpl (not to Hermes). Never fall back to the Hermes API round trip for the pill.
+  const latency = health?.latencyMs ?? null;
   let tone: "positive" | "warning" | "negative" | "faint" = "positive";
   let label = "Perpl";
-  const latency = health?.latencyMs ?? null;
-  let sub: string = latency !== null ? `${Math.round(latency)} ms` : rtt !== null ? `${rtt} ms` : "";
+  let sub = latency !== null ? `${Math.round(latency)} ms` : "";
   let live = false;
   if (stream.state === "offline") {
     tone = "negative";
@@ -79,11 +92,10 @@ function ConnectionPill({ rtt, perpl, health }: { rtt: number | null; perpl: Per
     label = "Reconnecting";
     sub = `${stream.attempt}/${OFFLINE_AFTER_ATTEMPTS}`;
     live = true;
-  } else if (health ?? perpl) {
-    const st = (health ?? perpl)!.status;
-    if (st === "reconnecting") (tone = "warning", (live = true), (sub = "reconnecting"));
-    else if (st === "disconnected") (tone = "negative", (sub = "disconnected"));
-    else if (st === "not_configured") (tone = "faint", (sub = "not set up"));
+  } else if (link) {
+    if (link.status === "reconnecting") (tone = "warning", (live = true), (sub = "reconnecting"));
+    else if (link.status === "disconnected") (tone = "negative", (sub = "disconnected"));
+    else if (link.status === "not_configured") (tone = "faint", (sub = "not set up"));
   }
 
   const show = () => {
@@ -95,6 +107,9 @@ function ConnectionPill({ rtt, perpl, health }: { rtt: number | null; perpl: Per
   };
   useEffect(() => () => void (leave.current && clearTimeout(leave.current)), []);
 
+  const mode = health?.mode ?? perpl?.mode;
+  const account = health?.accountId ?? perpl?.accountId ?? null;
+  const source = health?.latencySource ? SOURCE_WORD[health.latencySource] : null;
   return (
     <>
       <button
@@ -109,6 +124,7 @@ function ConnectionPill({ rtt, perpl, health }: { rtt: number | null; perpl: Per
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="true"
         aria-expanded={open}
+        title={latency !== null && source ? `Round trip to Perpl, ${source}` : undefined}
       >
         <span className="hm-dot" data-tone={tone === "faint" ? undefined : tone} data-live={live ? "true" : undefined} />
         <span className="v" style={{ fontFamily: "var(--font-ui)" }}>
@@ -118,42 +134,70 @@ function ConnectionPill({ rtt, perpl, health }: { rtt: number | null; perpl: Per
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={ref}>
         <div className="conn-pop" onMouseEnter={show} onMouseLeave={hide}>
-          <div className="r"><span className="l">Live stream (Hermes)</span><span className="v">{streamDown ? stream.state : "live"}</span></div>
-          <div className="r"><span className="l">Perpl trading socket</span><span className="v">{(health ?? perpl) ? (health ?? perpl)!.status.replace("_", " ") : "n/a"}</span></div>
-          <div className="r"><span className="l">Perpl mode</span><span className="v">{health?.mode ?? perpl?.mode ?? "n/a"}</span></div>
-          <div className="r"><span className="l">Perpl round trip</span><span className="v">{latency !== null ? formatMs(latency) : "n/a"}</span></div>
-          <div className="r"><span className="l">Last heartbeat</span><span className="v">{health?.heartbeatAgeMs != null ? `${(health.heartbeatAgeMs / 1000).toFixed(1)}s ago` : "n/a"}</span></div>
+          <div className="r"><span className="l">Live stream (Hermes)</span><span className="v">{STREAM_WORD[stream.state] ?? "n/a"}</span></div>
+          <div className="r"><span className="l">Perpl trading socket</span><span className="v">{link ? (LINK_WORD[link.status] ?? "n/a") : "n/a"}</span></div>
+          <div className="r"><span className="l">Perpl mode</span><span className="v">{mode === "sim" ? "Simulated" : mode === "live" ? "Testnet" : "n/a"}</span></div>
+          <div className="r"><span className="l">Round trip to Perpl</span><span className="v" title={source ?? undefined}>{latency !== null ? formatMs(latency) : "n/a"}</span></div>
+          {source && <div className="r"><span className="l">Measured</span><span className="v" style={{ fontFamily: "var(--font-ui)" }}>{source}</span></div>}
+          <div className="r"><span className="l">Last heartbeat</span><span className="v">{heartbeatText(health?.heartbeatAgeMs)}</span></div>
+          <div className="r"><span className="l">Block time</span><span className="v">{health?.blockTimeMs != null ? `${Math.round(health.blockTimeMs)} ms` : "n/a"}</span></div>
           <div className="r"><span className="l">Reconnects</span><span className="v">{health ? health.reconnects : "n/a"}</span></div>
           <div className="r"><span className="l">Hermes API round trip</span><span className="v">{rtt !== null ? formatMs(rtt) : "n/a"}</span></div>
-          <div className="r"><span className="l">Account</span><span className="v">{(health?.accountId ?? perpl?.accountId) ? `#${health?.accountId ?? perpl?.accountId}` : "n/a"}</span></div>
-          {health?.lastError && <div className="r"><span className="l">Last error</span><span className="v">{health.lastError}</span></div>}
+          <div className="r"><span className="l">Account</span><span className="v">{account ? `#${account}` : "n/a"}</span></div>
+          {health?.lastError && <div className="r"><span className="l">Last error</span><span className="v" style={{ fontFamily: "var(--font-ui)" }}>{health.lastError}</span></div>}
         </div>
       </Popover>
     </>
   );
 }
 
+/** True for `ms` after mount. Lets a value that has not arrived yet show a skeleton first, then give up and hide. */
+function useGrace(ms: number): boolean {
+  const [on, setOn] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setOn(false), ms);
+    return () => clearTimeout(t);
+  }, [ms]);
+  return on;
+}
+
+/**
+ * Head block from the Perpl heartbeat (sim and live), with its age and the measured block time. No data yet: a skeleton
+ * for up to 5 s, then the item is hidden (`n/a` would mean "unknown", and here it just means "not connected").
+ */
 function HeadItem({ health }: { health: PerplHealthDTO | null }) {
-  const rpc = useHeadBlock();
+  const grace = useGrace(5000);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  // Prefer the head block the Perpl heartbeat reports; its age is measured from when this tab first saw that block.
+  // The age is measured from when this tab first saw that block number.
   const seen = useRef<{ n: number; at: number } | null>(null);
-  const hb = health?.headBlock ?? null;
-  if (hb !== null && seen.current?.n !== hb) seen.current = { n: hb, at: Date.now() };
-  const number = hb ?? rpc.data?.number ?? null;
-  const since = hb !== null ? seen.current?.at : rpc.data?.timestampMs;
-  const age = since !== undefined && number !== null ? Math.max(0, (now - since) / 1000) : null;
+  const number = health?.headBlock ?? null;
+  if (number !== null && seen.current?.n !== number) seen.current = { n: number, at: Date.now() };
+  const age = number !== null && seen.current ? Math.max(0, (now - seen.current.at) / 1000) : null;
+  if (number === null && !(grace && health === null)) return null;
+  const blockTime = health?.blockTimeMs != null ? `Block time about ${Math.round(health.blockTimeMs)} ms` : "Latest block";
   return (
-    <div className="tb-item tb-hide-sm tb-hide-md" style={{ order: 2 }} title="Latest block">
-      <span className="l">Head</span>
-      <span className="v">{orNA(number, formatBlock)}</span>
-      {age !== null && <span className="s">{age < 10 ? age.toFixed(1) : Math.round(age)}s</span>}
-    </div>
+    <>
+      <span className="vdiv tb-hide-sm" style={{ order: 2 }} />
+      <div className="tb-item tb-hide-sm tb-hide-md" style={{ order: 2 }} title={blockTime}>
+        <span className="l">Head</span>
+        {number === null ? <Skeleton w={48} h={12} /> : <span className="v">{formatBlock(number)}</span>}
+        {age !== null && <span className="s">{age < 10 ? age.toFixed(1) : Math.round(age)}s</span>}
+      </div>
+    </>
   );
+}
+
+const FAINT = { color: "var(--text-faint)" } as const;
+
+/** A TopBar value: skeleton while the first read is in flight, faint `n/a` when it failed, the value otherwise. */
+function Val({ loading, failed, children, className }: { loading: boolean; failed: boolean; children: ReactNode; className?: string }) {
+  if (loading) return <Skeleton w={48} h={12} />;
+  if (failed) return <span className="v" style={FAINT}>n/a</span>;
+  return <span className={className ? cn("v", className) : "v"}>{children}</span>;
 }
 
 /**
@@ -172,12 +216,21 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
   const [confirm, setConfirm] = useState(false);
 
   const acc = account.data;
-  const today = acc ? acc.realizedPnlTodayUsd + acc.unrealizedPnlUsd : null;
-  const stop = limits.data?.dailyLossStopUsd ?? null;
-  const used = today !== null ? Math.max(0, -today) : null;
+  const accLoading = account.isLoading;
+  const accFailed = account.isError && !acc;
+  // The server's own numbers: today PnL is realised + unrealised, the same figure the daily loss stop is checked against.
+  const today = acc ? (acc.todayPnlUsd ?? acc.realizedPnlTodayUsd + acc.unrealizedPnlUsd) : null;
+  const stop = acc?.lossStopUsd ?? limits.data?.dailyLossStopUsd ?? null;
+  const used = acc?.lossStopUsedUsd ?? (today !== null ? Math.max(0, -today) : null);
+  const stopLoading = accLoading || (limits.isLoading && stop === null);
   const paused = limits.data?.paused ?? false;
   const equityFlash = useFlash(acc?.equityUsd);
   const todayFlash = useFlash(today);
+  const tone = pnlTone(today);
+  const todayParts =
+    acc && acc.todayRealizedUsd !== undefined && acc.todayUnrealizedUsd !== undefined
+      ? `Realised ${formatSignedUsd(acc.todayRealizedUsd)}, unrealised ${formatSignedUsd(acc.todayUnrealizedUsd)}. Resets 00:00 UTC.`
+      : undefined;
 
   const pause = (next: boolean) =>
     setPaused.mutate(next, {
@@ -213,27 +266,38 @@ export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {
         </div>
       </div>
       <div className="tb-strip">
-        <span className="vdiv tb-hide-sm" style={{ order: 2 }} />
         <HeadItem health={health} />
         <span className="vdiv tb-hide-md tb-hide-sm" style={{ order: 2 }} />
         <div className="tb-item" style={{ order: 2 }}>
           <span className="l">Equity</span>
-          <span className={cn("v", equityFlash)}>{orNA(acc?.equityUsd, (v) => formatUsd(v))}</span>
+          <Val loading={accLoading} failed={accFailed} className={equityFlash}>
+            {formatUsd(acc?.equityUsd)}
+          </Val>
         </div>
         <span className="vdiv" style={{ order: 2 }} />
-        <div className="tb-item" style={{ order: 2 }}>
+        <div className="tb-item" style={{ order: 2 }} title={todayParts}>
           <span className="l">Today</span>
-          <span className={cn("v", todayFlash, pnlTone(today) === "positive" && "pos", pnlTone(today) === "negative" && "neg")}>{orNA(today, (v) => formatSignedUsd(v))}</span>
+          <Val loading={accLoading} failed={accFailed} className={cn(todayFlash, tone === "positive" && "pos", tone === "negative" && "neg")}>
+            {formatSignedUsd(today)}
+          </Val>
         </div>
         <span className="vdiv" style={{ order: 2 }} />
-        <div className="tb-item" style={{ order: 2 }} title={stop !== null ? `Daily loss stop: Hermes blocks new orders once today's loss reaches ${formatUsd(stop, { decimals: 0 })}. Resets 00:00 UTC.` : undefined}>
+        <div className="tb-item" style={{ order: 2 }} title={stop !== null && stop > 0 ? `Daily loss stop: Hermes blocks new orders once today's loss reaches ${formatUsd(stop, { decimals: 0 })}. Resets 00:00 UTC.` : undefined}>
           <span className="l">Loss stop</span>
-          <span className="tb-stop">
-            <Meter value={used ?? 0} max={stop ?? 1} aria-label="Daily loss used" />
-            <span className="v">
-              {orNA(used, (v) => formatUsd(v, { decimals: 0 }))} <span className="s">/ {orNA(stop, (v) => formatUsd(v, { decimals: 0 }))}</span>
+          {stopLoading ? (
+            <Skeleton w={96} h={12} />
+          ) : accFailed || stop === null || used === null ? (
+            <span className="v" style={FAINT}>n/a</span>
+          ) : stop === 0 ? (
+            <span className="v" style={FAINT}>Off</span>
+          ) : (
+            <span className="tb-stop">
+              <Meter value={used} max={stop} aria-label="Daily loss used" />
+              <span className="v">
+                {formatUsd(used, { decimals: 0 })} <span className="s">/ {formatUsd(stop, { decimals: 0 })}</span>
+              </span>
             </span>
-          </span>
+          )}
         </div>
       </div>
       <ConfirmModal

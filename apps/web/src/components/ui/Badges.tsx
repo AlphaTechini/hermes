@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { ArrowDownRight, ArrowUpRight, CircleCheck, CircleDot, CircleX, Copy, Hand, Hourglass, Minus, OctagonX, type LucideIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CircleCheck, CircleDot, CircleX, Copy, FlaskConical, Hand, Hourglass, Minus, OctagonX, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/cn";
 import type { OutcomeKind, SideKind } from "../../lib/alert-view";
 
@@ -61,6 +61,7 @@ const PILL: Record<OutcomeKind, { tone: PillTone; icon: LucideIcon | "live"; lab
   filled: { tone: "positive", icon: CircleCheck, label: "Filled" },
   partly_filled: { tone: "positive", icon: CircleDot, label: "Partly filled" },
   blocked: { tone: "warning", icon: OctagonX, label: "Blocked" },
+  dry_run: { tone: "neutral", icon: FlaskConical, label: "Dry run" },
   not_filled: { tone: "negative", icon: CircleX, label: "Not filled" },
   rejected: { tone: "negative", icon: CircleX, label: "Rejected by Perpl" },
   ignored: { tone: "neutral", icon: Copy, label: "Ignored" },
@@ -84,7 +85,7 @@ export interface StatusPillProps {
 
 /**
  * 22 high pill, subtle tone background, 12px icon + 12/500 text. Every outcome state in DESIGN.md:
- * In flight, Needs approval, Filled, Partly filled, Blocked, Not filled, Rejected by Perpl, Ignored, Expired.
+ * In flight, Needs approval, Filled, Partly filled, Blocked, Dry run, Not filled, Rejected by Perpl, Ignored, Expired.
  */
 export function StatusPill({ kind, tone, icon, outline, children, className, title }: StatusPillProps) {
   const base = kind ? PILL[kind] : undefined;
@@ -92,7 +93,7 @@ export function StatusPill({ kind, tone, icon, outline, children, className, tit
   const Icon = icon ?? (base && base.icon !== "live" ? base.icon : undefined);
   const live = !icon && base?.icon === "live";
   return (
-    <span className={cn("pill", t !== "neutral" && t, outline && "outline", className)} title={title}>
+    <span className={cn("pill", t !== "neutral" && t, outline && "pill-outline", className)} title={title}>
       {live && <span className="hm-dot" data-tone="accent" data-live="true" />}
       {Icon && <Icon aria-hidden />}
       {children ?? base?.label}
@@ -111,7 +112,7 @@ const CONN: Record<ConnectionState, { tone: "positive" | "warning" | "negative";
 export function ConnectionPill({ state, children }: { state: ConnectionState; children?: ReactNode }) {
   const c = CONN[state];
   return (
-    <span className="pill outline">
+    <span className="pill pill-outline">
       <span className="hm-dot" data-tone={c.tone} data-live={c.live ? "true" : undefined} />
       {children ?? c.label}
     </span>

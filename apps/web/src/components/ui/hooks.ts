@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
+/** `matchMedia` as state. False where `matchMedia` does not exist (tests). */
+export function useMediaQuery(query: string): boolean {
+  const get = () => (typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia(query).matches : false);
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia(query);
+    const on = () => setMatches(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return matches;
+}
+
 /** Copies text to the clipboard (with a textarea fallback) and flips `copied` for `resetMs`. */
 export function useCopy(resetMs = 1400) {
   const [copied, setCopied] = useState(false);

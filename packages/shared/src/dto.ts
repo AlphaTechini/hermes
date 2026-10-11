@@ -375,6 +375,17 @@ export interface PerplContextDTO {
   geoBlock: string[];
 }
 
+/** One row of `GET /api/markets`: a Perpl market and its current mark price. Does not depend on holding a position. */
+export interface MarketDTO {
+  symbol: string;
+  /** Perpl market id. */
+  id: number;
+  /** Current mark price in USD; null when Perpl (or the simulator) has no price for it right now. */
+  markPrice: number | null;
+  /** Change over the last 24 hours, percent (1.2 = +1.2%). Absent when the feed does not provide it. */
+  change24hPct?: number | null;
+}
+
 // --- report card -------------------------------------------------------------
 
 export type ReportRange = "24h" | "7d" | "30d" | "all";

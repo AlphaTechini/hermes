@@ -107,7 +107,7 @@ export function SectionNum({ n, title, children }: { n: number; title: ReactNode
 
 /** Master/detail list row (strategies): `aria-current="true"` gives the active inset bar. */
 export function ListItem({ current, to, className, children, ...rest }: { current?: boolean; to?: string; children: ReactNode } & HTMLAttributes<HTMLElement>) {
-  const props = { className: cn("list-item", className), "aria-current": current ? ("true" as const) : undefined, ...rest };
+  const props = { className: cn("li-row", className), "aria-current": current ? ("true" as const) : undefined, ...rest };
   return to ? (
     <Link to={to} {...props}>
       {children}
@@ -188,7 +188,7 @@ export function SaveBar({ summary, onDiscard, onSave, saving }: { summary: React
   return (
     <div className="savebar" role="region" aria-label="Unsaved changes">
       <span className="changed-dot" />
-      <span className="grow">{summary}</span>
+      <span className="hm-grow">{summary}</span>
       <Button variant="ghost" onClick={onDiscard} disabled={saving}>
         Discard
       </Button>

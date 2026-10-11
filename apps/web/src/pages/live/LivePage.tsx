@@ -1,6 +1,6 @@
 import { Inbox, Send, Copy, CircleAlert } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { AlertRecord, Fill } from "@hermes/shared";
 import { PageHeader } from "../../components/shell/PageHeader";
 import {
@@ -21,6 +21,7 @@ import {
   useToast,
 } from "../../components/ui";
 import { errorMessage } from "../../lib/api";
+import { useStreamStatus } from "../../lib/stream";
 import { formatBps, formatCountdown, formatMs, formatRelativeTime, formatTimeZone } from "../../lib/format";
 import { PAGE } from "../../lib/routes";
 import { useAlerts, useApprovals, useFills, useLimits, useOrders, useSendTestAlert, useStrategies } from "../../lib/queries";
@@ -39,7 +40,37 @@ export function LivePage() {
   const [strategyId, setStrategyId] = useState<string>(ALL);
   const [filter, setFilter] = useState<OutcomeFilter>("all");
   const [showAll, setShowAll] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // The alert drawer is deep-linked: `/live?alert=<id>`. Opening pushes a history entry, so Back closes it.
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const openId = params.get("alert");
+  const pushedDrawer = useRef(false);
+  const setOpenId = useCallback(
+    (id: string | null) => {
+      if (id) {
+        pushedDrawer.current = true;
+        setParams((p) => {
+          const n = new URLSearchParams(p);
+          n.set("alert", id);
+          return n;
+        });
+      } else if (pushedDrawer.current) {
+        pushedDrawer.current = false;
+        navigate(-1);
+      } else {
+        setParams((p) => {
+          const n = new URLSearchParams(p);
+          n.delete("alert");
+          return n;
+        }, { replace: true });
+      }
+    },
+    [navigate, setParams],
+  );
+  useEffect(() => {
+    if (!openId) pushedDrawer.current = false; // closed with Back: the next close must not step back again
+  }, [openId]);
+  const stream = useStreamStatus();
 
   const strategies = useStrategies();
   const limits = useLimits();
@@ -59,7 +90,7 @@ export function LivePage() {
   // With nothing today the stream falls back to the latest alerts so the page is never empty after a quiet night.
   const pool = hasToday ? today : (items ?? []);
   const counts = useMemo(() => {
-    const c = { all: pool.length, filled: 0, blocked: 0, missed: 0 };
+    const c = { all: pool.length, filled: 0, blocked: 0, missed: 0, dry_run: 0 };
     for (const a of pool) {
       const b = bucketOf(a);
       if (b) c[b]++;
@@ -102,6 +133,7 @@ export function LivePage() {
 
   // --- row helpers ---------------------------------------------------------------------
   const sizeOf = useMemo(() => buildSizeLookup(fills.data), [fills.data, orders.data]);
+  const byId = useMemo(() => new Map((items ?? []).map((a) => [a.id, a])), [items]);
   const approvalByAlert = useMemo(() => new Map((pending.data ?? []).map((a) => [a.alertId, a.expiresAt])), [pending.data]);
 
   // --- send test alert -----------------------------------------------------------------
@@ -126,7 +158,11 @@ export function LivePage() {
   const failed = alertsQ.isError && !alertsQ.data;
   const empty = !loading && !failed && (items?.length ?? 0) === 0;
   const cap = limits.data?.defaultSlippageBps ?? null;
-  const open = openId ? (items?.find((a) => a.id === openId) ?? null) : null;
+  // Loading, failed and empty are three different states. A failed load must never read as "0 alerts today".
+  const kpiLoading = loading && showSkeleton;
+  const na = <span className="faint">n/a</span>;
+  const cannot = failed ? "Could not load" : undefined;
+  const live = stream.state;
 
   const strategyOptions = [{ value: ALL, label: "All strategies" }, ...list.map((s) => ({ value: s.id, label: s.name }))];
 
@@ -147,49 +183,61 @@ export function LivePage() {
       <KpiRow aria-label="Today">
         <KpiTile
           label="Alerts today"
-          loading={loading && showSkeleton}
+          loading={kpiLoading}
           skeleton={[72, 40, 150]}
-          value={loading ? "" : stats.total}
+          value={loading ? "" : failed ? na : stats.total}
           sub={
-            <>
-              <span>{stats.filled} filled</span>
-              <span className="faint">·</span>
-              <span>{stats.blocked} blocked</span>
-              <span className="faint">·</span>
-              <span>{stats.missed} missed</span>
-            </>
+            cannot ?? (
+              <>
+                <span>{stats.filled} filled</span>
+                <span className="faint">·</span>
+                <span>{stats.blocked} blocked</span>
+                <span className="faint">·</span>
+                <span>{stats.missed} missed</span>
+                {stats.dryRun > 0 && (
+                  <>
+                    <span className="faint">·</span>
+                    <span>{stats.dryRun} dry run</span>
+                  </>
+                )}
+              </>
+            )
           }
         />
         <KpiTile
           label="Fill rate"
-          loading={loading && showSkeleton}
+          loading={kpiLoading}
           skeleton={[56, 72, 170]}
-          value={stats.fillRate === null ? <span className="faint">n/a</span> : stats.fillRate.toFixed(1)}
-          unit={stats.fillRate === null ? undefined : "%"}
-          sub={stats.eligible > 0 ? `${stats.filled} of ${stats.eligible} that passed your limits` : "Waiting for the first alert that passes your limits"}
+          value={failed || stats.fillRate === null ? na : stats.fillRate.toFixed(1)}
+          unit={failed || stats.fillRate === null ? undefined : "%"}
+          sub={cannot ?? (stats.eligible > 0 ? `${stats.filled} of ${stats.eligible} that passed your limits` : "Waiting for the first alert that passes your limits")}
         />
         <KpiTile
           label="Median alert to fill"
-          loading={loading && showSkeleton}
+          loading={kpiLoading}
           skeleton={[120, 72, 70]}
-          value={stats.medianMs === null ? <span className="faint">n/a</span> : Math.round(stats.medianMs)}
-          unit={stats.medianMs === null ? undefined : "ms"}
+          value={failed || stats.medianMs === null ? na : Math.round(stats.medianMs)}
+          unit={failed || stats.medianMs === null ? undefined : "ms"}
           sub={
-            <>
-              p95 <span className="d secondary">{stats.p95Ms === null ? "n/a" : formatMs(stats.p95Ms)}</span>
-            </>
+            cannot ?? (
+              <>
+                p95 <span className="d secondary">{stats.p95Ms === null ? "n/a" : formatMs(stats.p95Ms)}</span>
+              </>
+            )
           }
         />
         <KpiTile
           label="Median slippage"
-          loading={loading && showSkeleton}
+          loading={kpiLoading}
           skeleton={[100, 72, 160]}
-          value={stats.medianSlipBps === null ? <span className="faint">n/a</span> : stats.medianSlipBps.toFixed(1)}
-          unit={stats.medianSlipBps === null ? undefined : "bps"}
+          value={failed || stats.medianSlipBps === null ? na : stats.medianSlipBps.toFixed(1)}
+          unit={failed || stats.medianSlipBps === null ? undefined : "bps"}
           sub={
-            <>
-              vs alert price · your cap is <span className="d secondary">{cap === null ? "n/a" : formatBps(cap)}</span>
-            </>
+            cannot ?? (
+              <>
+                vs alert price · cap <span className="d secondary">{cap === null ? "n/a" : formatBps(cap, { decimals: 0 })}</span>
+              </>
+            )
           }
         />
       </KpiRow>
@@ -197,12 +245,7 @@ export function LivePage() {
       <Card>
         <CardHeader
           title="Alert stream"
-          meta={
-            <span className="row g2">
-              <span className="hm-dot" data-tone="positive" data-live="true" />
-              Live
-            </span>
-          }
+          meta={<StreamState state={live} />}
           actions={
             !empty &&
             !failed && (
@@ -212,10 +255,11 @@ export function LivePage() {
                 value={filter}
                 onChange={setFilter}
                 options={[
-                  { value: "all", label: "All", count: counts.all },
-                  { value: "filled", label: "Filled", count: counts.filled },
-                  { value: "blocked", label: "Blocked", count: counts.blocked },
-                  { value: "missed", label: "Missed", count: counts.missed },
+                  { value: "all", label: "All", ...(loading ? {} : { count: counts.all }) },
+                  { value: "filled", label: "Filled", ...(loading ? {} : { count: counts.filled }) },
+                  { value: "blocked", label: "Blocked", ...(loading ? {} : { count: counts.blocked }) },
+                  { value: "missed", label: "Missed", ...(loading ? {} : { count: counts.missed }) },
+                  ...(counts.dry_run > 0 || filter === "dry_run" ? [{ value: "dry_run" as const, label: "Dry run", count: counts.dry_run }] : []),
                 ]}
               />
             )
@@ -264,20 +308,26 @@ export function LivePage() {
               </div>
               {rows.length === 0 && (
                 <div className="empty" style={{ padding: "32px 24px" }}>
-                  <p>No {filter} alerts {hasToday ? "today" : "yet"}.</p>
+                  <p>{filter === "dry_run" ? "No dry runs" : `No ${filter} alerts`} {hasToday ? "today" : "yet"}.</p>
                 </div>
               )}
-              {rows.map((a) => (
+              {rows.map((a) => {
+                const dupOf = a.status === "duplicate" ? (a.events.find((e) => e.status === "duplicate")?.detail?.duplicateOf as string | undefined) : undefined;
+                const original = dupOf ? byId.get(dupOf) : undefined;
+                return (
                 <StreamRow
                   key={a.id}
                   alert={a}
                   size={sizeOf(a)}
+                  original={original}
+                  originalSize={original ? sizeOf(original) : undefined}
                   relative={formatRelativeTime(a.receivedAt, now)}
                   approvalLeft={approvalLeftFor(approvalByAlert.get(a.id), now)}
                   fresh={fresh.has(a.id)}
                   onOpen={setOpenId}
                 />
-              ))}
+                );
+              })}
             </div>
             <CardFooter>
               <span>
@@ -295,23 +345,36 @@ export function LivePage() {
 
       <div className="grid-12">
         <PositionsCard className="span-7" orders={orders.data} />
-        <FillsCard className="span-5" fills={fills.data} alerts={items} />
+        <FillsCard className="span-5" fills={fills.data} alerts={items} alertsSettled={!alertsQ.isLoading} failed={fills.isError} onRetry={() => void fills.refetch()} />
       </div>
 
-      <Drawer open={openId !== null} onClose={() => setOpenId(null)} title={drawerTitle(open)} width={720}>
-        {openId && <AlertDetailView id={openId} variant="drawer" onNavigate={() => setOpenId(null)} />}
+      <Drawer open={openId !== null} onClose={() => setOpenId(null)} title={drawerTitle(openId)} width={720}>
+        {openId && <AlertDetailView id={openId} variant="drawer" />}
       </Drawer>
     </>
   );
 }
 
-function drawerTitle(a: AlertRecord | null) {
-  return a ? (
-    <span className="row g2">
-      Alert <span className="mono">{a.id}</span>
+/** `Alert alr_jsDeAChkCFWu73`. Truncates with an ellipsis (the Drawer's h2 does the clipping) and keeps the full id in `title`. */
+function drawerTitle(id: string | null) {
+  return id ? (
+    <span className="hm-truncate" style={{ display: "block" }} title={id}>
+      Alert <span className="mono">{id}</span>
     </span>
   ) : (
     "Alert"
+  );
+}
+
+/** The live dot in the stream header follows the real connection: Live, Reconnecting, or Paused when updates stopped. */
+function StreamState({ state }: { state: ReturnType<typeof useStreamStatus>["state"] }) {
+  const tone = state === "live" ? "positive" : state === "reconnecting" || state === "connecting" ? "warning" : undefined;
+  const label = state === "live" ? "Live" : state === "reconnecting" ? "Reconnecting" : state === "connecting" ? "Connecting" : "Paused";
+  return (
+    <span className="row g2" role="status">
+      <span className="hm-dot" data-tone={tone} data-live={tone ? "true" : undefined} />
+      {label}
+    </span>
   );
 }
 

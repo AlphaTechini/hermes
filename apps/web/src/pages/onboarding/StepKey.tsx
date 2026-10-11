@@ -7,7 +7,7 @@ import { Callout } from "../../components/ui/Feedback";
 import { usePerplConnection } from "../../lib/queries";
 import { formatNumber } from "../../lib/format";
 import { PERPL_API_KEYS_URL } from "../wallet/hooks";
-import { ApiKeyForm } from "../wallet/parts";
+import { ApiKeyForm, MetaParts } from "../wallet/parts";
 import { ArrowUpRight } from "lucide-react";
 import type { StepProps } from "./types";
 
@@ -61,14 +61,22 @@ export function StepKey({ go, keyDone }: StepProps) {
               <div className="col" style={{ minWidth: 0 }}>
                 <span className="n">{c.status === "connected" ? "Signed in to Perpl" : "Key saved, Perpl is not connected"}</span>
                 <span className="m">
-                  Account <span className="mono">#{c.accountId ?? "n/a"}</span> · key <span className="mono">{c.apiKeyPublic ?? "n/a"}</span>
-                  {c.mode === "sim" && <> · simulated</>}
-                  {c.collateral !== null && (
-                    <>
-                      {" "}
-                      · collateral <span className="mono">${formatNumber(c.collateral, 2)}</span>
-                    </>
-                  )}
+                  <MetaParts
+                    parts={[
+                      <>
+                        Account <span className="mono">#{c.accountId ?? "n/a"}</span>
+                      </>,
+                      c.mode === "sim" ? "Simulated" : null,
+                      c.collateral !== null ? (
+                        <>
+                          Collateral <span className="mono">${formatNumber(c.collateral, 2)}</span>
+                        </>
+                      ) : null,
+                      <>
+                        Key <span className="mono">{c.apiKeyPublic ?? "n/a"}</span>
+                      </>,
+                    ]}
+                  />
                 </span>
                 {c.status !== "connected" && (health?.lastError ?? null) && <span className="m" style={{ color: "var(--negative-text)" }}>{health?.lastError}</span>}
               </div>
@@ -85,6 +93,7 @@ export function StepKey({ go, keyDone }: StepProps) {
       {showForm ? (
         <ApiKeyForm
           accountId={c?.accountId}
+          onBackToAccount={() => go(2)}
           submitLabel={keyDone ? "Verify and replace" : "Verify and continue"}
           onSaved={() => setReplacing(false)}
           onCancel={keyDone ? () => setReplacing(false) : undefined}

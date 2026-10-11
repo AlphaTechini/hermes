@@ -8,7 +8,7 @@
  * Stage deltas are differences of server `atMs` timestamps.
  */
 import { BLOCK_REASON_LABELS, type AlertRecord, type AlertStatus, type BlockReason } from "@hermes/shared";
-import { formatBps, formatDeltaMs, formatMs, formatPrice } from "./format";
+import { formatBps, formatDeltaMs, formatMs, formatPrice, shortId } from "./format";
 
 export const STAGE_NAMES = ["Received", "Verified", "Checked", "Sent", "Accepted", "Filled"] as const;
 export type StageName = (typeof STAGE_NAMES)[number];
@@ -71,7 +71,7 @@ export function alertPipeline(alert: Pick<AlertRecord, "status" | "events">): Al
     for (let k = 0; k < 6; k++) states[k] = k < stoppedAt ? "done" : k === stoppedAt ? st : "skipped";
   };
 
-  const inFlight = !["filled", "partially_filled", "blocked", "duplicate", "rejected_auth", "invalid", "expired", "failed"].includes(status);
+  const inFlight = !["filled", "partially_filled", "blocked", "duplicate", "rejected_auth", "invalid", "expired", "failed", "dry_run"].includes(status);
   const awaitingApproval = status === "pending_approval";
 
   if (FILLED.includes(status)) {
@@ -115,7 +115,7 @@ export function alertPipeline(alert: Pick<AlertRecord, "status" | "events">): Al
   const start = at[0] ?? null;
   let end: number | null = null;
   if (FILLED.includes(status)) end = at[5] ?? null;
-  else if (stoppedAt >= 0) end = terminalAt;
+  else if (stoppedAt >= 0 || status === "dry_run") end = terminalAt;
   const totalMs = start !== null && end !== null ? Math.max(0, end - start) : null;
 
   return { stages, totalMs, awaitingApproval, stoppedAt };
@@ -129,6 +129,7 @@ export type OutcomeKind =
   | "filled"
   | "partly_filled"
   | "blocked"
+  | "dry_run"
   | "not_filled"
   | "rejected"
   | "ignored"
@@ -150,6 +151,7 @@ export const OUTCOME_LABELS: Record<OutcomeKind, string> = {
   filled: "Filled",
   partly_filled: "Partly filled",
   blocked: "Blocked",
+  dry_run: "Dry run",
   not_filled: "Not filled",
   rejected: "Rejected by Perpl",
   ignored: "Ignored",
@@ -201,13 +203,18 @@ export function alertOutcome(alert: AlertRecord): AlertOutcome {
         ? o("rejected", "Perpl refused the order")
         : o("not_filled", alert.errorCode === "timeout" ? "No fill in time" : humanizeCode(alert.errorCode));
     case "duplicate":
-      return o("ignored", dupOf ? `Duplicate of ${dupOf}` : "Duplicate alert");
+      return o("ignored", dupOf ? `Duplicate of ${shortId(dupOf)}` : "Duplicate alert", dupOf !== null);
+    case "dry_run":
+      return o("dry_run", "Checks passed, not sent");
     case "expired":
       return o("expired", "Not approved in time");
     case "rejected_auth":
       return o("bad_secret", "Secret did not match");
-    case "invalid":
-      return o("invalid", "A required field is missing");
+    case "invalid": {
+      const issues = alert.events.find((e) => e.status === "invalid")?.detail?.issues;
+      const path = Array.isArray(issues) ? (issues[0] as { path?: unknown } | undefined)?.path : undefined;
+      return o("invalid", typeof path === "string" && path ? `${path} is missing or invalid` : "A required field is missing");
+    }
     default:
       return o("in_flight", "Waiting for Perpl fill");
   }

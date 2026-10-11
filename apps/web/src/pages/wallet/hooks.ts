@@ -1,7 +1,8 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatEther, formatUnits, getAddress, parseAbi } from "viem";
-import type { PerplConnectionDTO, WalletActionDTO, WalletActionKind } from "@hermes/shared";
-import { post } from "../../lib/api";
+import type { PerplConnectionDTO, PerplContextDTO, WalletActionDTO, WalletActionKind } from "@hermes/shared";
+import { useAuthEnabled } from "../../auth/context";
+import { get, post } from "../../lib/api";
 import { publicClient, useHeadBlock } from "../../lib/chain";
 import { qk } from "../../lib/queries";
 import { useStreamEvents } from "../../lib/stream";
@@ -71,5 +72,64 @@ export const latestAction = (actions: WalletActionDTO[] | undefined, kind: Walle
 
 export const PERPL_API_KEYS_URL = "https://testnet.perpl.xyz/apikeys";
 export const MON_FAUCET_URL = "https://faucet.monad.xyz";
-/** Minimum first deposit for a new Perpl account, in AUSD (set by Perpl). */
-export const MIN_DEPOSIT_AUSD = 100;
+
+/** Collateral symbol shown in copy while Perpl's context has not loaded (the token is always AUSD on testnet). */
+export const COLLATERAL_FALLBACK = "AUSD";
+
+/**
+ * `GET /api/perpl/context`: Perpl's own `pub/context` (collateral token, the minimum to open an account and to deposit,
+ * markets, geo-blocked countries). Onboarding reads every deposit number from here, never from a constant.
+ */
+export function usePerplContext() {
+  const enabled = useAuthEnabled();
+  return useQuery({
+    queryKey: ["perpl", "context"],
+    queryFn: () => get<PerplContextDTO>("/api/perpl/context"),
+    enabled,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+}
+
+export interface DepositInfo {
+  /** Collateral token symbol, for example "AUSD". */
+  symbol: string;
+  /** Minimum to open an exchange account (the first deposit). null until Perpl's context is known. */
+  minOpen: number | null;
+  /** Minimum for any later deposit. null until known. */
+  minDeposit: number | null;
+  /** Context is still loading. */
+  loading: boolean;
+  /** Context could not be read (the server still validates the amount). */
+  unavailable: boolean;
+}
+
+/** Collateral token and deposit minimums for copy and validation. */
+export function useDepositInfo(): DepositInfo {
+  const ctx = usePerplContext();
+  return {
+    symbol: ctx.data?.collateralToken ?? COLLATERAL_FALLBACK,
+    minOpen: ctx.data?.minAccountOpenAusd ?? null,
+    minDeposit: ctx.data?.minDepositAusd ?? null,
+    loading: ctx.isLoading,
+    unavailable: ctx.isError,
+  };
+}
+
+/** Block number a transaction was mined in, read from the chain. null for simulated hashes and until the receipt exists. */
+export function useTxBlock(hash: string | null | undefined, simulated: boolean | undefined) {
+  return useQuery({
+    queryKey: ["wallet", "tx-block", hash ?? ""],
+    enabled: Boolean(hash) && !simulated,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: async (): Promise<number | null> => {
+      try {
+        const r = await publicClient.getTransactionReceipt({ hash: hash as `0x${string}` });
+        return Number(r.blockNumber);
+      } catch {
+        return null;
+      }
+    },
+  });
+}

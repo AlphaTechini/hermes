@@ -17,6 +17,7 @@ import type {
   AccountSummary,
   AlertDetail,
   AlertListResponse,
+  AlertRecord,
   AlertStatus,
   Approval,
   ApprovalStatus,
@@ -24,6 +25,7 @@ import type {
   Fill,
   IngestResponse,
   LimitsResponse,
+  MarketDTO,
   Order,
   PerplConnectionDTO,
   PolicyDemoRequest,
@@ -56,6 +58,22 @@ export interface AlertsParams {
   limit?: number;
 }
 
+/**
+ * The server DTOs are still moving. A list endpoint that answers with `{ items: [...] }`, `null` or an error-shaped
+ * object must never take a screen down with `x.reduce is not a function`: lists are normalised once, here, so the
+ * query cache only ever holds arrays.
+ */
+export function asList<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  const items = (value as { items?: unknown } | null | undefined)?.items;
+  return Array.isArray(items) ? (items as T[]) : [];
+}
+
+function asAlertList(value: unknown): AlertListResponse {
+  const v = (value ?? {}) as Partial<AlertListResponse>;
+  return { items: asList<AlertRecord>(value), nextCursor: typeof v.nextCursor === "string" ? v.nextCursor : null };
+}
+
 export const qk = {
   me: ["me"] as const,
   limits: ["limits"] as const,
@@ -72,6 +90,7 @@ export const qk = {
   orders: (limit?: number) => ["orders", limit ?? "default"] as const,
   fills: (limit?: number) => ["fills", limit ?? "default"] as const,
   positions: ["positions"] as const,
+  markets: ["markets"] as const,
   account: ["account"] as const,
   approvals: {
     all: ["approvals"] as const,
@@ -147,7 +166,7 @@ export const useSetPaused = () => {
 
 export const useStrategies = () => {
   const enabled = useAuthEnabled();
-  return useQuery({ queryKey: qk.strategies.list, queryFn: () => get<StrategyDTO[]>("/api/strategies"), enabled });
+  return useQuery({ queryKey: qk.strategies.list, queryFn: async () => asList<StrategyDTO>(await get<StrategyDTO[]>("/api/strategies")), enabled });
 };
 
 export const useStrategy = (id: string | undefined) => {
@@ -234,7 +253,7 @@ export const useAlerts = (params: AlertsParams = {}) => {
   const enabled = useAuthEnabled();
   return useQuery({
     queryKey: qk.alerts.list(params),
-    queryFn: () => get<AlertListResponse>("/api/alerts", { strategyId: params.strategyId, status: params.status, limit: params.limit ?? 50 }),
+    queryFn: async () => asAlertList(await get<AlertListResponse>("/api/alerts", { strategyId: params.strategyId, status: params.status, limit: params.limit ?? 50 })),
     enabled,
   });
 };
@@ -244,8 +263,8 @@ export const useAlertsInfinite = (params: AlertsParams = {}) => {
   const enabled = useAuthEnabled();
   return useInfiniteQuery({
     queryKey: [...qk.alerts.list(params), "infinite"] as const,
-    queryFn: ({ pageParam }) =>
-      get<AlertListResponse>("/api/alerts", { strategyId: params.strategyId, status: params.status, limit: params.limit ?? 50, cursor: pageParam }),
+    queryFn: async ({ pageParam }) =>
+      asAlertList(await get<AlertListResponse>("/api/alerts", { strategyId: params.strategyId, status: params.status, limit: params.limit ?? 50, cursor: pageParam })),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled,
@@ -265,17 +284,34 @@ export const useAlert = (id: string | undefined) => {
 
 export const useOrders = (limit = 100) => {
   const enabled = useAuthEnabled();
-  return useQuery({ queryKey: qk.orders(limit), queryFn: () => get<Order[]>("/api/orders", { limit }), enabled });
+  return useQuery({ queryKey: qk.orders(limit), queryFn: async () => asList<Order>(await get<Order[]>("/api/orders", { limit })), enabled });
 };
 
 export const useFills = (limit = 100) => {
   const enabled = useAuthEnabled();
-  return useQuery({ queryKey: qk.fills(limit), queryFn: () => get<Fill[]>("/api/fills", { limit }), enabled });
+  return useQuery({ queryKey: qk.fills(limit), queryFn: async () => asList<Fill>(await get<Fill[]>("/api/fills", { limit })), enabled });
 };
 
 export const usePositions = () => {
   const enabled = useAuthEnabled();
-  return useQuery({ queryKey: qk.positions, queryFn: () => get<Position[]>("/api/positions"), enabled });
+  return useQuery({ queryKey: qk.positions, queryFn: async () => asList<Position>(await get<Position[]>("/api/positions")), enabled });
+};
+
+/**
+ * Perpl markets with their current mark price (`GET /api/markets`). A mark is a market value: it does not depend on
+ * holding a position. `markPrice` is null only when Perpl has no price right now. Marks are not on the stream, so this
+ * refetches every 5 s while a screen that shows one is mounted.
+ */
+export const useMarkets = () => {
+  const enabled = useAuthEnabled();
+  return useQuery({
+    queryKey: qk.markets,
+    queryFn: async () => asList<MarketDTO>(await get<MarketDTO[]>("/api/markets")),
+    enabled,
+    staleTime: 4_000,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
+  });
 };
 
 export const useAccount = () => {
@@ -289,7 +325,7 @@ export const useApprovals = (status?: ApprovalStatus) => {
   const enabled = useAuthEnabled();
   return useQuery({
     queryKey: qk.approvals.list(status),
-    queryFn: () => get<Approval[]>("/api/approvals", { status }),
+    queryFn: async () => asList<Approval>(await get<Approval[]>("/api/approvals", { status })),
     enabled,
   });
 };
@@ -381,7 +417,7 @@ export const useSignerRegistered = () => {
 
 export const useWalletActions = (limit = 50) => {
   const enabled = useAuthEnabled();
-  return useQuery({ queryKey: qk.wallet.actions, queryFn: () => get<WalletActionDTO[]>("/api/wallet/actions", { limit }), enabled });
+  return useQuery({ queryKey: qk.wallet.actions, queryFn: async () => asList<WalletActionDTO>(await get<WalletActionDTO[]>("/api/wallet/actions", { limit })), enabled });
 };
 
 /** Server-signed wallet action under the Privy policy (approve_collateral, create_account, allow_forwarding, deposit, faucet). */

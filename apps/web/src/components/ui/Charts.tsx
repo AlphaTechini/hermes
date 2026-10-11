@@ -118,7 +118,7 @@ export function LineChart({ series, yTicks, formatY = String, xTicks, tooltip, a
     <div ref={ref} className={cn("chart-wrap", className)} style={{ position: "relative", padding: 0 }}>
       {W > 0 && n > 0 && (
         <svg className="chart" width={W} height={height} role="img" aria-label={aria["aria-label"] ?? series.map((s) => s.label).join(", ")}>
-          <g className="grid">
+          <g className="chart-grid">
             {ticks.map((v) => (
               <line key={v} x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} />
             ))}
@@ -225,7 +225,7 @@ export function Histogram({ bins, median, height = 220, className, ...aria }: Hi
     <div ref={ref} className={cn("chart-wrap", className)} style={{ position: "relative", padding: 0 }}>
       {W > 0 && (
         <svg className="chart" width={W} height={height} role="img" aria-label={aria["aria-label"] ?? "Histogram"} onMouseLeave={() => setHover(null)}>
-          <g className="grid">
+          <g className="chart-grid">
             {ticks.map((v) => (
               <line key={v} x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} />
             ))}

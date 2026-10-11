@@ -18,6 +18,7 @@ import {
   type AccountSummary,
   type AlertListResponse,
   type IngestResponse,
+  type MarketDTO,
   type PerplConnectionDTO,
   type PerplContextDTO,
   type PerplLinkStatus,
@@ -316,6 +317,31 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         updatedAt: Date.now(),
         live: false,
       });
+    });
+
+    // --- markets ---
+    // Mark prices for every Perpl market, so the UI never needs an open position to show one.
+    api.get("/api/markets", async (req): Promise<MarketDTO[]> => {
+      const client = perpl()?.get(req.user.id);
+      const connected = Boolean(client?.isConnected());
+      return Promise.all(
+        MARKET_SYMBOLS.map(async (symbol): Promise<MarketDTO> => {
+          const { id } = MARKETS[symbol];
+          let markPrice: number | null = null;
+          if (client && connected) {
+            try {
+              const p = await Promise.race([
+                client.getMarkPrice(id),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("mark price timed out")), 2_000).unref()),
+              ]);
+              markPrice = Number.isFinite(p) && p > 0 ? p : null;
+            } catch (err) {
+              req.log.debug({ err, symbol }, "mark price unavailable");
+            }
+          }
+          return { symbol, id, markPrice };
+        }),
+      );
     });
 
     // --- approvals ---

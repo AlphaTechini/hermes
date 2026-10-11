@@ -41,6 +41,8 @@ export interface DataTableProps<Row> {
   maxHeight?: number | string;
   /** Shown instead of the table when `rows` is empty and not loading (usually an <EmptyState>). */
   empty?: ReactNode;
+  /** Shown instead of the table when the data failed to load (an <EmptyState tone="negative"> with Retry). Wins over `empty`. */
+  error?: ReactNode;
   /** Render `skeletonRows` placeholder rows with the same columns. */
   loading?: boolean;
   skeletonRows?: number;
@@ -72,6 +74,7 @@ export function DataTable<Row>({
   stickyHeader,
   maxHeight,
   empty,
+  error,
   loading,
   skeletonRows = 4,
   rowClassName,
@@ -146,6 +149,7 @@ export function DataTable<Row>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, columns, loading, skeletonRows, clickable, rowHref, onRowClick, rowKey, rowClassName]);
 
+  if (error) return <>{error}</>;
   if (showEmpty) return <>{empty}</>;
 
   return (

@@ -5,7 +5,7 @@ interface TooltipProps {
   content: ReactNode;
   /** Delay before showing, ms. DESIGN.md: 300. */
   delay?: number;
-  side?: "top" | "bottom";
+  side?: "top" | "bottom" | "right";
   children: ReactElement<Record<string, unknown>>;
 }
 
@@ -28,7 +28,8 @@ export function Tooltip({ content, delay = 300, side = "top", children }: Toolti
       clear();
       timer.current = setTimeout(() => {
         const r = el.getBoundingClientRect();
-        setPos({ x: r.left + r.width / 2, y: side === "top" ? r.top : r.bottom });
+        if (side === "right") setPos({ x: r.right, y: r.top + r.height / 2 });
+        else setPos({ x: r.left + r.width / 2, y: side === "top" ? r.top : r.bottom });
       }, wait);
     },
     [side],
@@ -63,9 +64,9 @@ export function Tooltip({ content, delay = 300, side = "top", children }: Toolti
             style={{
               position: "fixed",
               zIndex: 80,
-              left: Math.max(8, Math.min(pos.x, window.innerWidth - 8)),
+              left: side === "right" ? pos.x + 8 : Math.max(8, Math.min(pos.x, window.innerWidth - 8)),
               top: pos.y,
-              transform: side === "top" ? "translate(-50%, calc(-100% - 6px))" : "translate(-50%, 6px)",
+              transform: side === "right" ? "translate(0, -50%)" : side === "top" ? "translate(-50%, calc(-100% - 6px))" : "translate(-50%, 6px)",
               pointerEvents: "none",
               maxWidth: "min(320px, calc(100vw - 16px))",
               whiteSpace: "normal",

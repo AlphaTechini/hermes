@@ -73,18 +73,10 @@ import {
   useToast,
   type Column,
 } from "../components/ui";
-import { alertPipeline, type PipelineStage, type StageState } from "../lib/alert-view";
+import { alertOutcome, alertPipeline } from "../lib/alert-view";
 import { PAGE, ONBOARDING_STEPS } from "../lib/routes";
 import { formatBps, formatPrice, formatSignedUsd, formatSize, formatUsd, shortHex } from "../lib/format";
-import type { AlertRecord } from "@hermes/shared";
-
-const stage = (state: StageState, label: string): PipelineStage => ({ name: "Received", state, ms: null, atMs: null, label });
-const PIPES: [string, PipelineStage[]][] = [
-  ["In flight", [stage("done", "0 ms"), stage("done", "+3 ms"), stage("done", "+2 ms"), stage("done", "+12 ms"), stage("active", "…"), stage("pending", "")]],
-  ["Filled", [stage("done", "0 ms"), stage("done", "+4 ms"), stage("done", "+2 ms"), stage("done", "+11 ms"), stage("done", "+184 ms"), stage("final", "+411 ms")]],
-  ["Blocked at checks", [stage("done", "0 ms"), stage("done", "+4 ms"), stage("blocked", "+1 ms"), stage("skipped", ""), stage("skipped", ""), stage("skipped", "")]],
-  ["Not filled", [stage("done", "0 ms"), stage("done", "+4 ms"), stage("done", "+2 ms"), stage("done", "+10 ms"), stage("done", "+176 ms"), stage("failed", "+302 ms")]],
-];
+import type { AlertRecord, AlertStatus } from "@hermes/shared";
 
 interface PosRow {
   market: string;
@@ -155,6 +147,33 @@ const FAKE_ALERT: AlertRecord = {
     { id: 6, alertId: "A-10482", status: "filled", atMs: 1612, detail: null },
   ],
 };
+
+/** A fixture alert whose events end at the given statuses. Pipelines below are computed from these with `alertPipeline()`, as the app does. */
+function fixture(status: AlertStatus, steps: [AlertStatus, number][], extra: Partial<AlertRecord> = {}): AlertRecord {
+  return {
+    ...FAKE_ALERT,
+    id: `A-${status}`,
+    status,
+    latencyMs: null,
+    avgFillPrice: null,
+    slippageBps: null,
+    events: steps.map(([st, atMs], i) => ({ id: i + 1, alertId: `A-${status}`, status: st, atMs: 1000 + atMs, detail: null })),
+    ...extra,
+  };
+}
+
+const PIPES: [string, AlertRecord][] = [
+  ["In flight", fixture("sent", [["received", 0], ["verified", 3], ["risk_checked", 5], ["sent", 17]])],
+  ["Needs approval", fixture("pending_approval", [["received", 0], ["verified", 4], ["risk_checked", 6], ["pending_approval", 8]])],
+  ["Filled", FAKE_ALERT],
+  ["Blocked at checks", fixture("blocked", [["received", 0], ["verified", 4], ["blocked", 5]], { blockReason: "size_above_max" })],
+  ["Not filled", fixture("failed", [["received", 0], ["verified", 4], ["risk_checked", 6], ["sent", 16], ["accepted", 192], ["failed", 494]], { errorCode: "timeout" })],
+  ["Rejected by Perpl", fixture("failed", [["received", 0], ["verified", 4], ["risk_checked", 6], ["sent", 17], ["failed", 84]], { errorCode: "order_rejected" })],
+  ["Ignored", fixture("duplicate", [["received", 0], ["duplicate", 2]])],
+  ["Expired", fixture("expired", [["received", 0], ["verified", 4], ["risk_checked", 6], ["pending_approval", 8], ["expired", 120008]])],
+  ["Bad secret", fixture("rejected_auth", [["received", 0], ["rejected_auth", 1]])],
+  ["Invalid, later stages skipped", fixture("invalid", [["received", 0], ["invalid", 2]])],
+];
 
 function Lbl({ children }: { children: React.ReactNode }) {
   return <div className="gal-lbl">{children}</div>;
@@ -318,10 +337,13 @@ export function ComponentsPage() {
             <div>
               <Lbl>pipeline · every terminal state</Lbl>
               <div className="col" style={{ gap: 16 }}>
-                {PIPES.map(([name, stages]) => (
-                  <div key={name} className="row" style={{ gap: 16 }}>
-                    <span className="xs muted" style={{ width: 120, flex: "none" }}>{name}</span>
-                    <div className="grow"><LifecyclePipeline stages={stages} size="lg" /></div>
+                {PIPES.map(([name, alert]) => (
+                  <div key={name} className="row" style={{ gap: 16, flexWrap: "wrap" }}>
+                    <div className="col" style={{ width: 150, flex: "none", gap: 4, alignItems: "flex-start" }}>
+                      <span className="xs muted">{name}</span>
+                      <StatusPill kind={alertOutcome(alert).kind} />
+                    </div>
+                    <div className="hm-grow" style={{ minWidth: 280 }}><LifecyclePipeline stages={alertPipeline(alert).stages} size="lg" /></div>
                   </div>
                 ))}
               </div>
@@ -571,7 +593,7 @@ export function ComponentsPage() {
             <div className="row between"><span className="xs muted">38 s left</span><Countdown remainingSec={38} totalSec={120} /></div>
             <div className="grade">
               <GradeBadge grade="B" />
-              <div className="col grow" style={{ gap: 8 }}>
+              <div className="col hm-grow" style={{ gap: 8 }}>
                 <span><span className="mono" style={{ fontSize: 18 }}>88.7</span> <span className="muted">/ 100</span></span>
                 <GradeScale grade="B" />
               </div>

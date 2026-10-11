@@ -127,9 +127,9 @@ export const formatFraction = (value: number | null | undefined, opts: { signed?
  * Basis points, 1 decimal: `1.6 bps`, `−0.4 bps`. Positive means WORSE than the alert price (see
  * `slippageBps` in @hermes/shared). `{ signed: true }` forces a `+` on positive values.
  */
-export function formatBps(value: number | null | undefined, opts: { signed?: boolean } = {}): string {
+export function formatBps(value: number | null | undefined, opts: { signed?: boolean; decimals?: number } = {}): string {
   return orNA(value, (v) => {
-    const s = nf(1).format(Math.abs(v));
+    const s = nf(opts.decimals ?? 1).format(Math.abs(v));
     const zero = Number(s) === 0;
     const sign = zero ? "" : v < 0 ? MINUS : opts.signed ? "+" : "";
     return `${sign}${s} bps`;
@@ -273,6 +273,11 @@ export function shortHex(value: string | null | undefined, head = 4, tail = 4): 
   });
 }
 export const shortAddress = shortHex;
+
+/** Hermes record ids, shortened so they read as an id and not as a cut-off sentence: `alr_fXS7eJLw7FJxyz` -> `alr_fXS7…xyz`. */
+export function shortId(value: string | null | undefined, head = 8, tail = 3): string {
+  return orNA(value, (v) => (v.length <= head + tail + 1 ? v : `${v.slice(0, head)}${ELLIPSIS}${v.slice(-tail)}`));
+}
 export const shortHash = shortHex;
 
 export const explorerTxUrl = (hash: string): string => `${EXPLORER_BASE}/tx/${hash}`;
