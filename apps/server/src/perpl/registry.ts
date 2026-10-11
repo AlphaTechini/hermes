@@ -192,7 +192,7 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
   /** Boot: log the Perpl context, start a client for every stored connection (in the background) and the push timer. */
   async start(): Promise<void> {
     this.stopped = false;
-    await this.logContext();
+    void this.logContext(); // network call with its own timeout: never hold up boot
     for (const userId of this.o.repos.connections.allUserIds()) {
       try {
         await this.refresh(userId);
@@ -358,8 +358,14 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     };
   }
 
-  private publish(e: Entry): void {
+  /** Health snapshot only (errors, periodic refresh). */
+  private publishHealth(e: Entry): void {
     this.o.bus.publish(e.userId, { type: "perpl_status", health: this.healthOf(e) });
+  }
+
+  /** Link state changed: health snapshot plus the plain `perpl` status event older clients listen to. */
+  private publish(e: Entry): void {
+    this.publishHealth(e);
     this.o.bus.publish(e.userId, { type: "perpl", status: e.link });
   }
 
@@ -373,7 +379,7 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     const next = err ? { code: err.code, message: err.message } : null;
     if (e.error?.code === next?.code && e.error?.message === next?.message) return;
     e.error = next;
-    this.publish(e);
+    this.publishHealth(e);
   }
 
   // ---- entries and connecting -------------------------------------------------------------------------------------
@@ -560,8 +566,9 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     e.error = null;
     e.lastHeartbeatAt = Date.now();
     this.publish(e);
-    void this.syncAll(e).then(() => this.maybeRestoreSimPositions(e));
-    void raw.headBlock().then((h) => (e.head = h)).catch(() => {});
+    const stored = this.o.repos.positions.list(e.userId); // read before the first sync overwrites it with live state
+    void this.syncAll(e).then(() => this.maybeRestoreSimPositions(e, stored));
+    void this.probeLatency(e).then(() => this.publishHealth(e));
   }
 
   private async dispose(e: Entry): Promise<void> {
@@ -591,8 +598,7 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     const raw = e.raw;
     if (!raw || e.disposed) return;
     try {
-      this.persistPositions(e, await raw.getPositions());
-      await this.publishAccount(e);
+      this.persistPositions(e, await raw.getPositions()); // also schedules the account push
     } catch (err) {
       this.log.warn({ userId: e.userId, err: (err as Error).message }, "Perpl snapshot sync failed");
     }
@@ -603,7 +609,7 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     e.accountTimer = setTimeout(() => {
       e.accountTimer = undefined;
       void this.publishAccount(e);
-    }, 100);
+    }, 25);
     e.accountTimer.unref();
   }
 
@@ -619,7 +625,7 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
   }
 
   /** Live account summary: equity, free collateral, margin used, uPnL; realised PnL today comes from the DB. */
-  async accountSummary(e: Entry): Promise<AccountSummary> {
+  private async accountSummary(e: Entry): Promise<AccountSummary> {
     const raw = e.raw;
     if (!raw || e.link !== "connected") throw new Error("Perpl is not connected");
     const a = await raw.getAccount();
@@ -638,26 +644,30 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
     };
   }
 
+  /** Timed public REST call: a smoothed round-trip estimate to Perpl, plus a head block fallback. */
+  private async probeLatency(e: Entry): Promise<void> {
+    const raw = e.raw;
+    if (!raw || e.disposed) return;
+    try {
+      const t0 = performance.now();
+      const head = await withTimeout(raw.rest.getHeadBlock(), 4_000, "latency probe");
+      const rtt = performance.now() - t0;
+      e.latencyMs = e.latencyMs === null ? rtt : e.latencyMs * 0.6 + rtt * 0.4;
+      if (head !== undefined && (e.head === null || head > e.head)) e.head = head;
+    } catch {
+      /* a failed probe just leaves the old estimate */
+    }
+  }
+
   /** Periodic push so marks, head block and latency keep moving on the dashboard. */
   private async tick(): Promise<void> {
     if (this.stopped) return;
     for (const e of this.entries.values()) {
       if (e.disposed || e.link !== "connected" || !e.raw) continue;
       e.tickCount++;
-      const raw = e.raw;
-      try {
-        if (e.tickCount % 3 === 1) {
-          const t0 = performance.now();
-          const head = await withTimeout(raw.rest.getHeadBlock(), 4_000, "latency probe");
-          const rtt = performance.now() - t0;
-          e.latencyMs = e.latencyMs === null ? rtt : e.latencyMs * 0.6 + rtt * 0.4;
-          if (head !== undefined && (e.head === null || head > e.head)) e.head = head;
-        }
-      } catch {
-        /* a failed probe just leaves the old estimate */
-      }
+      if (e.tickCount % 3 === 1) await this.probeLatency(e);
       if (this.o.bus.listenerCount > 0) {
-        this.publish(e);
+        this.publishHealth(e);
         await this.syncAll(e);
       }
     }
@@ -670,13 +680,12 @@ export class PerplClientRegistry implements PerplRuntime, RawClientProvider {
    * the stored snapshot (the seeded demo, or yesterday's session) still lists some. Re-open them at the current
    * simulated price so the dashboard and the next close alert match what the history says. Never runs against live Perpl.
    */
-  private async maybeRestoreSimPositions(e: Entry): Promise<void> {
+  private async maybeRestoreSimPositions(e: Entry, stored: Position[]): Promise<void> {
     if (!this.o.simulator || this.o.restoreSimPositions === false || e.restored || e.disposed || !e.raw) return;
     e.restored = true;
     try {
       const live = await e.raw.getPositions();
       if (live.length > 0) return;
-      const stored = this.o.repos.positions.list(e.userId);
       for (const p of stored) {
         if (!isMarketSymbol(p.market) || !(p.size > 0) || e.disposed || !e.raw) continue;
         const out = await e.raw.placeMarketOrder({

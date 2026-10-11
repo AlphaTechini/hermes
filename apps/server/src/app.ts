@@ -13,7 +13,8 @@ import type { Executor } from "./execution/types";
 import { HermesError } from "./errors";
 import { createIngest, type Ingest } from "./ingest/handler";
 import { hookRoutes } from "./ingest/routes";
-import type { PerplClientProvider } from "./perpl/types";
+import type { PerplLayer, PerplLayerFactory } from "./perpl/layer";
+import type { PerplRuntime } from "./perpl/runtime";
 import { Pipeline } from "./pipeline/pipeline";
 import { PrivyClient } from "@privy-io/node";
 import { DevWalletService } from "./privy/dev-service";
@@ -28,8 +29,13 @@ export interface BuildAppOptions {
   db: Db;
   /** Defaults to {@link StubExecutor}, which fails every order with `perpl_not_connected`. */
   executor?: Executor;
-  /** Finds the PerplClient of a user (live or simulator). */
-  perpl?: PerplClientProvider;
+  /** Finds the PerplClient of a user (live or simulator). A {@link PerplRuntime} also provides health and key validation. */
+  perpl?: PerplRuntime;
+  /** Builds the whole Perpl integration (registry, executor, simulator) once the logger, repos and bus exist. Wins over `executor` / `perpl`. */
+  perplLayer?: PerplLayerFactory;
+  /** Pre-created repos / bus, for callers that must build the Perpl layer (which publishes on the bus) first. */
+  repos?: Repos;
+  bus?: EventBus;
   verifier?: AuthVerifier;
   /** Defaults to the real Privy wallet service in privy mode and the simulated {@link DevWalletService} otherwise. */
   walletService?: WalletService;
@@ -45,6 +51,8 @@ export interface HermesApp {
   ingest: Ingest;
   auth: Auth;
   wallet: WalletModule;
+  /** Present when built with `perplLayer`. */
+  perplLayer?: PerplLayer;
 }
 
 const stripSecretsFromUrl = (url: string) => url.replace(/([?&](?:token|ticket)=)[^&]*/g, "$1[redacted]");
@@ -64,14 +72,16 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
     trustProxy: true,
   });
 
-  const repos = createRepos(opts.db);
-  const bus = new EventBus();
-  const executor = opts.executor ?? new StubExecutor(opts.perpl);
+  const repos = opts.repos ?? createRepos(opts.db);
+  const bus = opts.bus ?? new EventBus();
+  const layer = opts.perplLayer ? await opts.perplLayer({ config, repos, bus, log: app.log }) : undefined;
+  const perpl: PerplRuntime | undefined = layer?.provider ?? opts.perpl;
+  const executor = layer?.executor ?? opts.executor ?? new StubExecutor(perpl);
   const pipeline = new Pipeline({
     repos,
     bus,
     executor,
-    perpl: opts.perpl,
+    perpl,
     log: app.log,
     ...(opts.approvalTtlMs !== undefined ? { approvalTtlMs: opts.approvalTtlMs } : {}),
   });
@@ -79,7 +89,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
   app.addHook("onClose", async () => {
     await pipeline.idle(); // let in-flight alerts finish before the DB closes
     pipeline.stop();
+    await layer?.stop();
   });
+  if (layer) app.addHook("onReady", async () => layer.start());
 
   const verifier: AuthVerifier =
     opts.verifier ??
@@ -130,8 +142,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
   app.addHook("onClose", async () => wallet.close());
 
   hookRoutes(app, { ingest });
-  apiRoutes(app, { config, repos, auth, pipeline, ingest, bus, perpl: opts.perpl });
+  apiRoutes(app, { config, repos, auth, pipeline, ingest, bus, perpl });
   walletRoutes(app, { auth, wallet });
 
-  return { app, repos, bus, pipeline, ingest, auth, wallet };
+  return { app, repos, bus, pipeline, ingest, auth, wallet, ...(layer ? { perplLayer: layer } : {}) };
 }

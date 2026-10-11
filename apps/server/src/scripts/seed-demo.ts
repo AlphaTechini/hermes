@@ -21,6 +21,7 @@ import { loadConfig } from "../config";
 import { encrypt, generateSecret, shortId } from "../crypto";
 import { openDb } from "../db/connection";
 import { createRepos, utcDay, type Repos } from "../db/repos";
+import { SIM_START_BALANCE_AUSD, generateSimCredentials } from "../perpl/sim-keys";
 
 const DAY = 86_400_000;
 
@@ -83,13 +84,24 @@ async function main() {
       approvalThresholdUsd: 2500,
     }),
   );
-  repos.connections.upsert({
-    userId: user.id,
-    accountId: "1001",
-    apiKeyPublic: "demo-api-key-public",
-    apiKeyPrivateEnc: encrypt("demo-not-a-real-key", config.masterKey),
-    collateral: 10_000,
-  });
+  // PERPL_MODE=sim: connect the demo user to a simulated Perpl account (fresh Ed25519 key, account 1001, 10,000 AUSD),
+  // stored exactly like a pasted key. The server enrolls it with the in-process simulator at boot, so after
+  // `seed:demo` + `dev` the dashboard is live (heartbeats, head block, positions). PERPL_MODE=live: there is no key to
+  // invent, so the demo user starts unconnected and pastes a real one.
+  let connectedAs = "not connected (PERPL_MODE=live: paste a Perpl API key in the app)";
+  if (config.perplMode === "sim") {
+    const creds = generateSimCredentials(1001);
+    repos.connections.upsert({
+      userId: user.id,
+      accountId: creds.accountId,
+      apiKeyPublic: creds.apiKeyPublic,
+      apiKeyPrivateEnc: encrypt(creds.apiKeyPrivate, config.masterKey),
+      collateral: SIM_START_BALANCE_AUSD,
+    });
+    connectedAs = `simulated Perpl account ${creds.accountId} (${SIM_START_BALANCE_AUSD} AUSD)`;
+  } else {
+    repos.connections.delete(user.id);
+  }
 
   const dailyPnl = new Map<string, number>();
   const stats = { alerts: 0, filled: 0, blocked: 0, failed: 0, other: 0 };
@@ -396,9 +408,16 @@ async function main() {
   }
 
   repos.positions.replaceAll(user.id, finalPositions);
+  // Seeded alerts are history, live ones land on top. Make sure a bad seeded day cannot trip today's daily loss stop
+  // and block the live demo: never let today's seeded realised PnL sit below 40% of the stop.
+  const today = utcDay(now);
+  const floor = -limits.dailyLossStopUsd * 0.4;
+  const todayPnl = repos.dailyPnl.get(user.id, today);
+  if (todayPnl < floor) repos.dailyPnl.add(user.id, today, floor - todayPnl);
   const total = db.prepare("SELECT COUNT(*) AS n FROM alerts WHERE user_id = ?").get(user.id) as { n: number };
 
   console.log(`Seeded demo user ${user.id} into ${config.databasePath} at ${new Date(hiresNowMs()).toISOString()}`);
+  console.log(`  perpl: ${connectedAs}`);
   console.log(`  alerts: ${total.n} (filled ${stats.filled}, blocked/expired ${stats.blocked}, failed ${stats.failed}, other ${stats.other})`);
   for (const c of created) {
     console.log(`  ${c.name}: ${config.publicBaseUrl}/hooks/${c.id}   secret: ${c.secret}`);

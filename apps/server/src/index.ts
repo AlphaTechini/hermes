@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { openDb } from "./db/connection";
+import { createPerplLayer } from "./perpl/layer";
 
 async function main() {
   // Optional .env (Node 22+). Real environment variables win.
@@ -18,21 +19,19 @@ async function main() {
   const config = loadConfig(process.env, { devKeyFile: true });
   const db = openDb(config.databasePath);
 
-  // ---------------------------------------------------------------------------------------------
-  // PERPL INTEGRATION POINT
-  // The Perpl layer (live client + simulator) plugs in here:
-  //   const perpl: PerplClientProvider = createPerplProvider(config, repos);   // implements get(userId) / refresh(userId)
-  //   const executor: Executor = new PerplExecutor(perpl, repos);
-  // and is passed to buildApp({ executor, perpl }). Until then the StubExecutor fails every order with
-  // `perpl_not_connected`, so the whole pipeline is still observable end to end.
-  // ---------------------------------------------------------------------------------------------
-  const { app } = await buildApp({ config, db, logger: { level: process.env.LOG_LEVEL ?? "info" } });
+  // The Perpl layer (per-user client registry, executor and, with PERPL_MODE=sim, the in-process simulator) is built
+  // by buildApp once the logger, repos and event bus exist, and started on ready.
+  const { app } = await buildApp({ config, db, perplLayer: createPerplLayer(), logger: { level: process.env.LOG_LEVEL ?? "info" } });
 
   for (const w of config.warnings) {
     const bar = "!".repeat(78);
     process.stderr.write(`\n${bar}\n  WARNING: ${w}\n${bar}\n\n`);
   }
-  app.log.warn(`No Perpl client provider registered (PERPL_MODE=${config.perplMode}): orders will fail with perpl_not_connected.`);
+  app.log.info(
+    config.perplMode === "sim"
+      ? "PERPL_MODE=sim: orders go to the in-process Perpl simulator. POST /api/perpl/sim/connect (or the onboarding button) connects a funded simulated account."
+      : `PERPL_MODE=live: orders go to Perpl (${config.perplApiBase}). A user's API key is validated against Perpl when it is saved.`,
+  );
 
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received, shutting down`);

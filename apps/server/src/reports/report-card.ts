@@ -68,7 +68,18 @@ const FAILURE_LABELS: Record<string, string> = {
   timeout: "No status from Perpl in time",
   pipeline_error: "Internal error",
   executor_error: "Executor error",
+  perpl_timeout: "No final status from Perpl (outcome unknown)",
+  unfilled: "Not filled (no liquidity within the slippage limit)",
+  forwarding_disabled: "Order forwarding is off on the Perpl account",
+  size_too_small: "Order size rounded to zero lots",
+  no_position: "No position to close on Perpl",
+  socket_closed_1011: "Perpl closed the connection while the order was in flight",
+  limit_orders_unsupported: "Limit orders are not supported",
+  invalid_order: "Order rejected before sending (invalid)",
 };
+
+const failureLabel = (code: string): string =>
+  FAILURE_LABELS[code] ?? (code.startsWith("sr:") ? `Perpl rejected the order (reason ${code.slice(3)})` : `Failed: ${code}`);
 
 const RANGE_DAYS: Record<Exclude<ReportRange, "all">, number> = { "7d": 7, "30d": 30 };
 
@@ -176,7 +187,7 @@ export function buildReportCard(args: {
       g = { kind: a.status, reason, label: BLOCK_REASON_LABELS[reason], count: 0 };
     } else if (a.status === "failed") {
       const code = a.errorCode ?? "unknown";
-      g = { kind: "failed", reason: code, label: FAILURE_LABELS[code] ?? `Failed: ${code}`, count: 0 };
+      g = { kind: "failed", reason: code, label: failureLabel(code), count: 0 };
     }
     if (!g) continue;
     const key = `${g.kind}:${g.reason}`;

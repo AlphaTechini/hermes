@@ -325,9 +325,10 @@ export class Pipeline {
       realizedPnlTodayUsd: this.repos.dailyPnl.get(alert.userId, utcDay(now)),
       openNotionalUsd,
       ordersLastMinute: this.repos.orders.countSince(alert.userId, now - 60_000),
-      // With no client registered at all we let the stub executor fail the order with `perpl_not_connected`
-      // so the full lifecycle is recorded; a registered but disconnected client is blocked here.
-      perplConnected: client ? client.isConnected() : true,
+      // Without any Perpl provider (the stub executor setup) we let the executor fail the order with
+      // `perpl_not_connected` so the full lifecycle is recorded. With a provider, a user who has no client yet
+      // (nothing connected) or whose client is down is blocked here, before anything is sent.
+      perplConnected: client ? client.isConnected() : !this.perpl,
       alertAgeSec: Math.max(0, (now - alertTime) / 1000),
     };
     return { state, positionFor: (m) => positions[m.toUpperCase()] };
@@ -432,7 +433,9 @@ export class Pipeline {
 
     switch (e.type) {
       case "sent": {
-        const patch: Parameters<Repos["orders"]["patch"]>[1] = { status: "sent" };
+        // A retry under a new rq re-announces `sent`: update rq/sn/lb but never move the order backwards.
+        const patch: Parameters<Repos["orders"]["patch"]>[1] =
+          order.status === "pending" || order.status === "sent" ? { status: "sent" } : {};
         if (e.rq !== undefined) patch.rq = e.rq;
         if (e.sn !== undefined) patch.sn = e.sn;
         if (e.lb !== undefined) patch.lb = e.lb;
@@ -444,8 +447,13 @@ export class Pipeline {
         break;
       }
       case "accepted": {
-        publishOrder({ status: "accepted", ...(e.perplOrderId ? { perplOrderId: e.perplOrderId } : {}) });
-        this.transition(e.alertId, "accepted", {}, { orderId: e.orderId, perplOrderId: e.perplOrderId }, e.atMs);
+        // Perpl acknowledges twice (forwarded, then the exchange order id). The second one only enriches the order.
+        const already = order.status === "accepted" || order.status === "partially_filled" || order.status === "filled";
+        publishOrder({
+          ...(already ? {} : { status: "accepted" as const }),
+          ...(e.perplOrderId ? { perplOrderId: e.perplOrderId } : {}),
+        });
+        if (!already) this.transition(e.alertId, "accepted", {}, { orderId: e.orderId, perplOrderId: e.perplOrderId }, e.atMs);
         break;
       }
       case "partially_filled":
@@ -467,8 +475,14 @@ export class Pipeline {
         if (e.fill.realizedPnl !== undefined) {
           this.repos.dailyPnl.add(e.userId, utcDay(Math.round(e.fill.atMs)), e.fill.realizedPnl);
         }
+        // Size and price of the order become what actually executed (volume weighted over its fills).
+        const mine = this.repos.fills.byAlert(e.alertId).filter((f) => f.orderId === e.orderId);
+        const filledSize = mine.reduce((a, f) => a + f.size, 0);
+        const vwap = filledSize > 0 ? mine.reduce((a, f) => a + f.price * f.size, 0) / filledSize : e.fill.price;
         publishOrder({
           status: e.type,
+          size: filledSize > 0 ? filledSize : e.fill.size,
+          price: vwap,
           ...(e.perplOrderId ? { perplOrderId: e.perplOrderId } : {}),
           ...(e.fill.txHash ? { txHash: e.fill.txHash } : {}),
         });

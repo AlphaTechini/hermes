@@ -3,6 +3,7 @@ import { buildApp, type HermesApp } from "../../src/app";
 import { loadConfig, type Config } from "../../src/config";
 import { openDb } from "../../src/db/connection";
 import type { Executor } from "../../src/execution/types";
+import type { PerplLayerFactory } from "../../src/perpl/layer";
 import type { PerplClientProvider } from "../../src/perpl/types";
 
 export interface Harness extends HermesApp {
@@ -12,7 +13,7 @@ export interface Harness extends HermesApp {
 }
 
 export async function makeHarness(
-  opts: { executor?: Executor; perpl?: PerplClientProvider; approvalTtlMs?: number; env?: Record<string, string> } = {},
+  opts: { executor?: Executor; perpl?: PerplClientProvider; perplLayer?: PerplLayerFactory; approvalTtlMs?: number; env?: Record<string, string>; db?: import("../../src/db/connection").Db } = {},
 ): Promise<Harness> {
   const config = loadConfig({
     NODE_ENV: "test",
@@ -21,12 +22,13 @@ export async function makeHarness(
     PUBLIC_BASE_URL: "https://hermes.test",
     ...opts.env,
   });
-  const db = openDb(":memory:");
+  const db = opts.db ?? openDb(":memory:");
   const h = await buildApp({
     config,
     db,
     ...(opts.executor ? { executor: opts.executor } : {}),
     ...(opts.perpl ? { perpl: opts.perpl } : {}),
+    ...(opts.perplLayer ? { perplLayer: opts.perplLayer } : {}),
     ...(opts.approvalTtlMs !== undefined ? { approvalTtlMs: opts.approvalTtlMs } : {}),
   });
   await h.app.ready();
@@ -36,7 +38,7 @@ export async function makeHarness(
     db,
     async close() {
       await h.app.close();
-      db.close();
+      if (!opts.db) db.close(); // a caller-owned database outlives the app (restart tests)
     },
   };
 }

@@ -31,3 +31,10 @@ Each transition is a row with a high-resolution timestamp (`performance.timeOrig
 - No secrets in the repo. `.env.example` only.
 - Perpl API private keys and webhook secrets are encrypted at rest with AES-256-GCM using `HERMES_MASTER_KEY` (32 bytes hex).
 - Perpl API keys are trade-only and cannot withdraw by Perpl design.
+
+## Perpl wiring (server)
+- `perpl/registry.ts` `PerplClientRegistry` (implements `PerplClientProvider`): one `@hermes/perpl` `PerplClient` per user with a stored `perpl_connection`, created at boot and when the connection is saved. `onRqAdvance` persists `last_rq` synchronously before every send, `lastRq` is read from the DB, failed connects are retried with back-off, state changes are pushed as SSE (`perpl_status`, `perpl`, `positions`, `account`). `GET /api/perpl/connection` carries `health` (heartbeat age, latency, head block, last error).
+- `execution/perpl-executor.ts` `PerplExecutor` (implements `Executor`): `OrderIntent` -> `client.placeMarketOrder`, tracker callbacks -> `ExecutionEvent`s. The tracker owns rq allocation and retries, the executor never retries. A tracker `timeout` becomes `failed` with code `perpl_timeout` (outcome ambiguous). Realised PnL of a close is price PnL against the position's entry price; fees are reported separately.
+- `perpl/layer.ts` wires both (and, with `PERPL_MODE=sim`, starts the simulator in-process on `PERPL_SIM_PORT`, default 8790). `buildApp({ perplLayer })` starts and stops it with the app.
+- `PUT /api/perpl/connection` validates the key by connecting and signing in (10 s) and answers 400 `perpl_invalid_key_format` / `perpl_key_rejected` / `perpl_account_not_found`, 409 `perpl_forwarding_disabled`, 451 `perpl_geo_blocked`, 502/504 `perpl_unreachable` / `perpl_timeout` without saving. In sim mode `POST /api/perpl/sim/connect` generates and enrolls a key pair, creates a 10,000 AUSD account and saves it exactly like a pasted key.
+- Scripts: `pnpm --filter @hermes/server seed:demo` (also connects the demo user in sim mode), `pnpm --filter @hermes/server demo:alerts` (TradingView-style alert stream against the local server).

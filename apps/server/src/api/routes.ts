@@ -33,7 +33,7 @@ import { utcDay, type Repos } from "../db/repos";
 import type { EventBus } from "../events/bus";
 import { HermesError, notFound } from "../errors";
 import type { Ingest } from "../ingest/handler";
-import type { PerplClientProvider } from "../perpl/types";
+import type { PerplRuntime } from "../perpl/runtime";
 import type { Pipeline } from "../pipeline/pipeline";
 import { buildReportCard, rangeStart } from "../reports/report-card";
 import { LimitQuery, parse } from "./helpers";
@@ -46,7 +46,7 @@ export interface ApiDeps {
   pipeline: Pipeline;
   ingest: Ingest;
   bus: EventBus;
-  perpl?: PerplClientProvider | undefined;
+  perpl?: PerplRuntime | undefined;
 }
 
 /** Only used to size test alerts when no live price is available. */
@@ -107,6 +107,8 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     };
     res.write("retry: 3000\n\n");
     send({ type: "ready", at: Date.now() });
+    const health = perpl()?.health?.(userId);
+    if (health) send({ type: "perpl_status", health }); // current link state right away, not on the next push
     const unsubscribe = bus.subscribe((m) => {
       if (m.userId === userId) send(m.event);
     });
@@ -327,8 +329,9 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
     const connectionDto = (userId: string): PerplConnectionDTO => {
       const row = repos.connections.get(userId);
       const client = perpl()?.get(userId);
+      const health = row ? (perpl()?.health?.(userId) ?? null) : null;
       let status: PerplLinkStatus = row ? "disconnected" : "not_configured";
-      if (client) status = client.isConnected() ? "connected" : "disconnected";
+      if (client) status = client.isConnected() ? "connected" : (health?.status === "reconnecting" ? "reconnecting" : "disconnected");
       return {
         configured: Boolean(row),
         status,
@@ -338,6 +341,7 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         createdAt: row?.createdAt ?? null,
         lastRq: row?.lastRq ?? null,
         mode: config.perplMode,
+        health,
       };
     };
     const afterConnectionChange = async (userId: string) => {
@@ -348,23 +352,43 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
       }
       bus.publish(userId, { type: "perpl", status: connectionDto(userId).status });
     };
+    /** Validate against Perpl (when a runtime is attached), then store the encrypted key and start the client. */
+    const saveConnection = async (
+      userId: string,
+      creds: { accountId: string; apiKeyPublic: string; apiKeyPrivate: string },
+      collateral?: number,
+    ) => {
+      await perpl()?.validate?.(userId, creds); // throws a HermesError with a clear code; nothing is saved then
+      repos.connections.upsert({
+        userId,
+        accountId: creds.accountId,
+        apiKeyPublic: creds.apiKeyPublic,
+        apiKeyPrivateEnc: encrypt(creds.apiKeyPrivate, config.masterKey),
+        ...(collateral !== undefined ? { collateral } : {}),
+      });
+      await afterConnectionChange(userId);
+      return connectionDto(userId);
+    };
 
     api.get("/api/perpl/connection", async (req) => connectionDto(req.user.id));
     api.put("/api/perpl/connection", async (req) => {
       const body = parse(PutPerplConnectionRequest, req.body);
-      repos.connections.upsert({
-        userId: req.user.id,
-        accountId: body.accountId,
-        apiKeyPublic: body.apiKeyPublic,
-        apiKeyPrivateEnc: encrypt(body.apiKeyPrivate, config.masterKey),
-      });
-      await afterConnectionChange(req.user.id);
-      return connectionDto(req.user.id);
+      return saveConnection(req.user.id, { accountId: body.accountId, apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate });
     });
     api.delete("/api/perpl/connection", async (req) => {
       repos.connections.delete(req.user.id);
       await afterConnectionChange(req.user.id);
       return connectionDto(req.user.id);
+    });
+    // Simulator only: one-click "Connect simulated Perpl account". Generates an Ed25519 key pair, enrolls it with the
+    // in-process simulator, creates a funded account and stores it exactly as a pasted key would be.
+    api.post("/api/perpl/sim/connect", async (req) => {
+      const rt = perpl();
+      if (config.perplMode !== "sim" || !rt?.provisionSim) {
+        throw new HermesError(404, "not_available", "The simulated Perpl account is only available with PERPL_MODE=sim.");
+      }
+      const creds = rt.provisionSim(req.user.id);
+      return saveConnection(req.user.id, creds, creds.collateralUsd);
     });
 
     // --- reports ---

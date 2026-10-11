@@ -7,7 +7,7 @@ export default defineConfig({
   outDir: "dist",
   clean: true,
   sourcemap: true,
-  // @hermes/shared is exported as TS source, so bundle it in.
-  noExternal: ["@hermes/shared"],
+  // @hermes/shared and @hermes/perpl are exported as TS source, so bundle them in (their npm deps stay external).
+  noExternal: ["@hermes/shared", "@hermes/perpl"],
   external: ["better-sqlite3"],
 });
