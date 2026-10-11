@@ -151,4 +151,37 @@ CREATE TABLE daily_pnl (
 );
 `,
   },
+  {
+    version: 2,
+    name: "privy_wallets_and_wallet_actions",
+    sql: `
+-- The user's Privy embedded wallet and whether the Hermes server signer (key quorum + policy) was added to it.
+CREATE TABLE privy_wallets (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  wallet_id TEXT NOT NULL,
+  address TEXT NOT NULL,
+  signer_added_at INTEGER,
+  policy_id TEXT,
+  simulated INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+
+-- Every transaction the Hermes server signer sent (or tried to send) from a user's wallet.
+CREATE TABLE wallet_actions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  to_address TEXT NOT NULL,
+  data TEXT NOT NULL,
+  value TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT NOT NULL,
+  tx_hash TEXT,
+  error TEXT,
+  simulated INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX idx_wallet_actions_user_created ON wallet_actions(user_id, created_at DESC);
+`,
+  },
 ];

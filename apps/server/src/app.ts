@@ -15,6 +15,13 @@ import { createIngest, type Ingest } from "./ingest/handler";
 import { hookRoutes } from "./ingest/routes";
 import type { PerplClientProvider } from "./perpl/types";
 import { Pipeline } from "./pipeline/pipeline";
+import { PrivyClient } from "@privy-io/node";
+import { DevWalletService } from "./privy/dev-service";
+import { WalletModule } from "./privy/module";
+import { specFromConfig } from "./privy/policy";
+import { PrivyService } from "./privy/privy-service";
+import { walletRoutes } from "./privy/routes";
+import type { WalletService } from "./privy/types";
 
 export interface BuildAppOptions {
   config: Config;
@@ -24,6 +31,8 @@ export interface BuildAppOptions {
   /** Finds the PerplClient of a user (live or simulator). */
   perpl?: PerplClientProvider;
   verifier?: AuthVerifier;
+  /** Defaults to the real Privy wallet service in privy mode and the simulated {@link DevWalletService} otherwise. */
+  walletService?: WalletService;
   logger?: boolean | { level: string };
   approvalTtlMs?: number;
 }
@@ -35,6 +44,7 @@ export interface HermesApp {
   pipeline: Pipeline;
   ingest: Ingest;
   auth: Auth;
+  wallet: WalletModule;
 }
 
 const stripSecretsFromUrl = (url: string) => url.replace(/([?&](?:token|ticket)=)[^&]*/g, "$1[redacted]");
@@ -106,8 +116,22 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
     reply.code(404).send({ error: { code: "not_found", message: "Route not found" } });
   });
 
+  const walletService: WalletService =
+    opts.walletService ??
+    (config.authMode === "privy" && config.privyAppId && config.privyAppSecret
+      ? new PrivyService({
+          config,
+          client: new PrivyClient({ appId: config.privyAppId, appSecret: config.privyAppSecret }),
+          log: app.log,
+        })
+      : new DevWalletService({ spec: specFromConfig(config.privyWallet) }));
+  const wallet = new WalletModule({ config, db: opts.db, repos, bus, service: walletService, log: app.log });
+  if (walletService instanceof PrivyService) void walletService.init(); // best-effort key quorum check, logs only
+  app.addHook("onClose", async () => wallet.close());
+
   hookRoutes(app, { ingest });
   apiRoutes(app, { config, repos, auth, pipeline, ingest, bus, perpl: opts.perpl });
+  walletRoutes(app, { auth, wallet });
 
-  return { app, repos, bus, pipeline, ingest, auth };
+  return { app, repos, bus, pipeline, ingest, auth, wallet };
 }

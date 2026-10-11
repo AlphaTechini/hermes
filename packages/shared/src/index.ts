@@ -6,3 +6,4 @@ export * from "./dto";
 export * from "./time";
 export * from "./templates";
 export * from "./metrics";
+export * from "./wallet";

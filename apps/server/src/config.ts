@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { parseUnits } from "viem";
 import { z } from "zod";
 
 const emptyToUndef = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
@@ -20,11 +21,41 @@ const EnvSchema = z.object({
     emptyToUndef,
     z.string().regex(/^0x[0-9a-fA-F]{40}$/).default("0x1964c32f0be608e7d29302aff5e61268e72080cc"),
   ),
+  AUSD_ADDRESS: z.preprocess(
+    emptyToUndef,
+    z.string().regex(/^0x[0-9a-fA-F]{40}$/).default("0xa9012a055bd4e0edff8ce09f960291c09d5322dc"),
+  ),
+  AGORA_FAUCET_ADDRESS: z.preprocess(
+    emptyToUndef,
+    z.string().regex(/^0x[0-9a-fA-F]{40}$/).default("0xd236c18d274e54faccc3dd9dda4b27965a73ee6c"),
+  ),
+  PRIVY_AUTHORIZATION_PRIVATE_KEY: opt(z.string()),
+  PRIVY_KEY_QUORUM_ID: opt(z.string()),
+  PRIVY_POLICY_ID: opt(z.string()),
+  PRIVY_APPROVE_CAP: z.preprocess(emptyToUndef, z.string().regex(/^\d+(\.\d{1,6})?$/, "AUSD amount, max 6 decimals").default("10000")),
+  PRIVY_POLICY_EXPIRES_AT: opt(z.coerce.number().int().positive()),
   PRIVY_APP_ID: opt(z.string()),
   PRIVY_APP_SECRET: opt(z.string()),
   AUTH_MODE: opt(z.enum(["privy", "dev"])),
   WEB_ORIGIN: z.preprocess(emptyToUndef, z.string().default("http://localhost:5173")),
 });
+
+/** Hermes Privy wallet module settings (server signer, policy mirror). */
+export interface PrivyWalletConfig {
+  /** Base64 PKCS8 P-256 private key of the Hermes server authorization key. Secret. */
+  authorizationPrivateKey: string | undefined;
+  keyQuorumId: string | undefined;
+  policyId: string | undefined;
+  /** Lowercase 0x addresses. */
+  exchangeAddress: string;
+  ausdAddress: string;
+  faucetAddress: string;
+  /** Max AUSD `approve` amount in human units and in 6-decimal base units. */
+  approveCapAusd: string;
+  approveCapBase: bigint;
+  /** Unix seconds; the policy refuses everything after this. Null = no time bound mirrored locally. */
+  policyExpiresAt: number | null;
+}
 
 export interface Config {
   nodeEnv: string;
@@ -42,6 +73,7 @@ export interface Config {
   perplExchangeAddress: string;
   privyAppId: string | undefined;
   privyAppSecret: string | undefined;
+  privyWallet: PrivyWalletConfig;
   authMode: "privy" | "dev";
   webOrigin: string;
   warnings: string[];
@@ -104,6 +136,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
     );
   }
 
+  if (authMode === "privy" && !(e.PRIVY_AUTHORIZATION_PRIVATE_KEY && e.PRIVY_KEY_QUORUM_ID && e.PRIVY_POLICY_ID)) {
+    warnings.push(
+      "Privy server signer is not configured (PRIVY_AUTHORIZATION_PRIVATE_KEY, PRIVY_KEY_QUORUM_ID, PRIVY_POLICY_ID): " +
+        "login works, but /api/wallet/actions is unavailable. Run `pnpm --filter @hermes/server privy:bootstrap`.",
+    );
+  }
+
   return {
     nodeEnv: e.NODE_ENV,
     port: e.PORT,
@@ -118,6 +157,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
     perplExchangeAddress: e.PERPL_EXCHANGE_ADDRESS,
     privyAppId: e.PRIVY_APP_ID,
     privyAppSecret: e.PRIVY_APP_SECRET,
+    privyWallet: {
+      authorizationPrivateKey: e.PRIVY_AUTHORIZATION_PRIVATE_KEY,
+      keyQuorumId: e.PRIVY_KEY_QUORUM_ID,
+      policyId: e.PRIVY_POLICY_ID,
+      exchangeAddress: e.PERPL_EXCHANGE_ADDRESS.toLowerCase(),
+      ausdAddress: e.AUSD_ADDRESS.toLowerCase(),
+      faucetAddress: e.AGORA_FAUCET_ADDRESS.toLowerCase(),
+      approveCapAusd: e.PRIVY_APPROVE_CAP,
+      approveCapBase: parseUnits(e.PRIVY_APPROVE_CAP, 6),
+      policyExpiresAt: e.PRIVY_POLICY_EXPIRES_AT ?? null,
+    },
     authMode,
     webOrigin: e.WEB_ORIGIN,
     warnings,

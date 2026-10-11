@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import type { AlertIssue } from "./alert";
+import type { WalletActionDTO } from "./wallet";
 import {
   ALERT_ACTIONS,
   type AlertStatus,
@@ -373,4 +374,5 @@ export type StreamEvent =
   | { type: "fill"; fill: Fill }
   | { type: "positions"; positions: Position[] }
   | { type: "approval"; approval: Approval }
-  | { type: "perpl"; status: PerplLinkStatus };
+  | { type: "perpl"; status: PerplLinkStatus }
+  | { type: "wallet_action"; action: WalletActionDTO };
