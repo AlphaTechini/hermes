@@ -1,0 +1,375 @@
+/* ==========================================================================
+   Hermes design tokens
+   --------------------------------------------------------------------------
+   Source of truth: /design/DESIGN.md. Prototype: /design/prototype/.
+   Dark is the default theme. Light theme: <html data-theme="light">.
+
+   Usage in the app (src/index.css):
+     @import "tailwindcss";
+     @import "./styles/tokens.css";
+     @import "./styles/components.css";
+
+   Fonts (npm):
+     import "@fontsource-variable/geist";       // "Geist Variable"
+     import "@fontsource-variable/geist-mono";  // "Geist Mono Variable"
+
+   Plain browsers ignore the @theme / @custom-variant blocks, which is why the
+   static prototype can link this file directly.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. Raw tokens: dark (default)
+   -------------------------------------------------------------------------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Surfaces: canvas < surface < raised. Sunken is for code and inset wells. */
+  --canvas: #0b0c0e;
+  --surface: #111316;
+  --surface-raised: #171a1e;
+  --surface-sunken: #0d0f11;
+  --surface-hover: #181b1f;
+  --surface-active: #1f2328;
+  --overlay: rgb(5 6 8 / 0.72);
+
+  /* Lines */
+  --border-subtle: #1c1f24;
+  --border: #262a30;
+  --border-strong: #353a42;
+
+  /* Text */
+  --text: #eceef0;
+  --text-secondary: #a4a8b0;
+  --text-muted: #7d828b;   /* 4.6:1 on --surface. Smallest size allowed: 11px */
+  --text-faint: #565b64;   /* disabled, placeholders, decorative only */
+  --text-inverse: #0b0c0e;
+
+  /* Primary action: high-contrast neutral, not a hue */
+  --primary: #eceef0;
+  --primary-hover: #ffffff;
+  --primary-active: #d6d9dd;
+  --primary-fg: #0b0c0e;
+
+  /* Accent "Relay blue": things in motion, focus, links, selection */
+  --accent: #4d8eff;
+  --accent-hover: #6aa1ff;
+  --accent-text: #80b1ff;
+  --accent-subtle: rgb(77 142 255 / 0.12);
+  --accent-border: rgb(77 142 255 / 0.36);
+
+  /* Semantics. Green/red are about money and outcomes; amber is "a limit acted". */
+  --positive: #30c48d;
+  --positive-text: #4dd6a2;
+  --positive-subtle: rgb(48 196 141 / 0.12);
+  --positive-border: rgb(48 196 141 / 0.32);
+
+  --negative: #f0565c;
+  --negative-text: #ff7d82;
+  --negative-subtle: rgb(240 86 92 / 0.12);
+  --negative-border: rgb(240 86 92 / 0.34);
+
+  --warning: #e8a23a;
+  --warning-text: #f2ba62;
+  --warning-subtle: rgb(232 162 58 / 0.12);
+  --warning-border: rgb(232 162 58 / 0.34);
+
+  /* Charts */
+  --chart-1: var(--accent);
+  --chart-1-wash: rgb(77 142 255 / 0.10);
+  --chart-2: #8a8f98;
+  --chart-grid: #1c1f24;
+  --chart-axis: #2c3036;
+
+  /* Code / JSON syntax: deliberately desaturated so it never reads as status */
+  --syntax-key: #9fb6d9;
+  --syntax-string: #c3d0a0;
+  --syntax-number: #e2b58a;
+  --syntax-literal: #c9a6d8;
+  --syntax-punct: #5f646d;
+
+  /* Focus */
+  --focus-ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+  --focus-ring-inset: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-subtle);
+
+  /* Elevation: dark UI leans on borders, shadows only for floating layers */
+  --shadow-1: 0 1px 0 0 rgb(255 255 255 / 0.02) inset;
+  --shadow-2: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 0 0 1px var(--border);
+  --shadow-3: 0 24px 64px -12px rgb(0 0 0 / 0.65), 0 0 0 1px var(--border);
+
+  /* Type families */
+  --font-ui: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-code: "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Motion */
+  --dur-instant: 80ms;
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --dur-slower: 420ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Layout */
+  --sidebar-w: 232px;
+  --sidebar-rail-w: 56px;
+  --topbar-h: 48px;
+  --content-max: 1440px;
+  --gutter: 24px;
+}
+
+/* --------------------------------------------------------------------------
+   2. Raw tokens: light
+   -------------------------------------------------------------------------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas: #f5f6f8;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f3f4f6;
+  --surface-hover: #f4f5f7;
+  --surface-active: #eceef1;
+  --overlay: rgb(15 18 22 / 0.40);
+
+  --border-subtle: #ebedf0;
+  --border: #e0e3e7;
+  --border-strong: #c9ced5;
+
+  --text: #0d0f12;
+  --text-secondary: #4b515a;
+  --text-muted: #666c76;
+  --text-faint: #a0a6ae;
+  --text-inverse: #ffffff;
+
+  --primary: #0d0f12;
+  --primary-hover: #262a30;
+  --primary-active: #000000;
+  --primary-fg: #ffffff;
+
+  --accent: #2563eb;
+  --accent-hover: #1d54d4;
+  --accent-text: #1f58d6;
+  --accent-subtle: rgb(37 99 235 / 0.08);
+  --accent-border: rgb(37 99 235 / 0.30);
+
+  --positive: #0b8f5c;
+  --positive-text: #087a4e;
+  --positive-subtle: rgb(11 143 92 / 0.08);
+  --positive-border: rgb(11 143 92 / 0.28);
+
+  --negative: #d32f37;
+  --negative-text: #bb232b;
+  --negative-subtle: rgb(211 47 55 / 0.07);
+  --negative-border: rgb(211 47 55 / 0.28);
+
+  --warning: #b86e00;
+  --warning-text: #965900;
+  --warning-subtle: rgb(184 110 0 / 0.08);
+  --warning-border: rgb(184 110 0 / 0.30);
+
+  --chart-1: var(--accent);
+  --chart-1-wash: rgb(37 99 235 / 0.08);
+  --chart-2: #8b919a;
+  --chart-grid: #eceef1;
+  --chart-axis: #d5d9de;
+
+  --syntax-key: #2f5a94;
+  --syntax-string: #4f6b1d;
+  --syntax-number: #9a4f0f;
+  --syntax-literal: #7a3f93;
+  --syntax-punct: #9aa0a8;
+
+  --focus-ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+
+  --shadow-1: 0 1px 2px 0 rgb(16 24 40 / 0.04);
+  --shadow-2: 0 8px 24px -6px rgb(16 24 40 / 0.14), 0 0 0 1px var(--border);
+  --shadow-3: 0 24px 64px -12px rgb(16 24 40 / 0.22), 0 0 0 1px var(--border);
+}
+
+/* --------------------------------------------------------------------------
+   3. Tailwind v4 theme mapping
+   `inline` makes utilities reference the variables, so theme switching works
+   at runtime. The default palette is cleared so only Hermes colors exist.
+   -------------------------------------------------------------------------- */
+@theme {
+  --color-*: initial;   /* remove Tailwind's default palette: only Hermes colors exist */
+}
+
+@theme inline {
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* backgrounds: bg-canvas bg-surface bg-raised bg-sunken bg-hover bg-active bg-overlay */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-hover: var(--surface-hover);
+  --color-active: var(--surface-active);
+  --color-overlay: var(--overlay);
+
+  /* borders: border-subtle border-line border-strong */
+  --color-subtle: var(--border-subtle);
+  --color-line: var(--border);
+  --color-strong: var(--border-strong);
+
+  /* text: text-fg text-secondary text-muted text-faint text-inverse */
+  --color-fg: var(--text);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-inverse: var(--text-inverse);
+
+  /* actions */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+
+  /* semantics: text-positive bg-positive-subtle border-positive-border ... */
+  --color-positive: var(--positive);
+  --color-positive-text: var(--positive-text);
+  --color-positive-subtle: var(--positive-subtle);
+  --color-positive-border: var(--positive-border);
+  --color-negative: var(--negative);
+  --color-negative-text: var(--negative-text);
+  --color-negative-subtle: var(--negative-subtle);
+  --color-negative-border: var(--negative-border);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-border: var(--warning-border);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-grid: var(--chart-grid);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+
+  --ease-out: var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+  --ease-in: var(--ease-in);
+}
+
+@theme {
+  /* Type scale (size / line-height). Body UI text is text-sm (13px). */
+  --text-2xs: 0.6875rem;        /* 11 */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;           /* 12 */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;         /* 13 */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;        /* 14 */
+  --text-base--line-height: 1.25rem;
+  --text-md: 1rem;              /* 16 */
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.25rem;           /* 20 */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;            /* 24 */
+  --text-xl--line-height: 2rem;
+  --text-2xl: 2rem;             /* 32 */
+  --text-2xl--line-height: 2.5rem;
+  --text-3xl: 3rem;             /* 48 */
+  --text-3xl--line-height: 3.25rem;
+  --text-4xl: 3.75rem;          /* 60 */
+  --text-4xl--line-height: 4rem;
+
+  --tracking-tight: -0.01em;
+  --tracking-tighter: -0.025em;
+  --tracking-caps: 0.04em;
+
+  /* Spacing: Tailwind's default 4px base (p-1 = 4px) is the Hermes grid. */
+  --spacing: 0.25rem;
+
+  /* Radius */
+  --radius-xs: 4px;   /* badges, chips, checkbox */
+  --radius-sm: 6px;   /* buttons, inputs, nav items */
+  --radius-md: 8px;   /* cards, tables, code blocks */
+  --radius-lg: 12px;  /* drawers, modals, popovers */
+  --radius-xl: 16px;  /* landing hero visual only */
+
+  --animate-pulse-ring: hm-pulse-ring 1.4s var(--ease-out) infinite;
+  --animate-shimmer: hm-shimmer 1.6s linear infinite;
+  --animate-flash-positive: hm-flash-positive 900ms var(--ease-out);
+  --animate-flash-negative: hm-flash-negative 900ms var(--ease-out);
+  --animate-row-in: hm-row-in var(--dur-slow) var(--ease-out);
+  --animate-spin: hm-spin 900ms linear infinite;
+}
+
+/* `light:` variant for the rare light-only tweak, e.g. light:shadow-1 */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+/* --------------------------------------------------------------------------
+   4. Base styles
+   -------------------------------------------------------------------------- */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  html {
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--canvas);
+    color: var(--text);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    font-feature-settings: "ss01" off, "cv11" on;
+  }
+
+  h1, h2, h3, h4, p { margin: 0; }
+  h1, h2, h3, h4 { font-weight: 600; letter-spacing: var(--tracking-tight, -0.01em); }
+
+  a { color: inherit; text-decoration: none; }
+
+  code, kbd, pre, samp, .font-mono {
+    font-family: var(--font-code);
+    /* Geist Mono's default zero is already distinct from O; do not enable "zero" (too noisy in dense tables). */
+  }
+
+  /* Every column of numbers: tabular figures */
+  .tnum, td, th { font-variant-numeric: tabular-nums; }
+
+  ::selection { background: var(--accent-subtle); color: var(--text); }
+
+  :focus { outline: none; }
+  :focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+  input, button, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+
+  /* Quiet scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}

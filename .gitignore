@@ -1,0 +1,15 @@
+node_modules
+dist
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+coverage
+data/
+*.log
+.DS_Store
+.vite
+*.tsbuildinfo
+# design/screenshots is intentionally kept in git

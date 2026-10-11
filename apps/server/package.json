@@ -1,0 +1,30 @@
+{
+  "name": "@hermes/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "seed:demo": "tsx src/scripts/seed-demo.ts"
+  },
+  "dependencies": {
+    "@fastify/cors": "11.3.1",
+    "@hermes/shared": "workspace:*",
+    "@privy-io/node": "0.35.0",
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.5",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "22.20.5",
+    "tsup": "8.5.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

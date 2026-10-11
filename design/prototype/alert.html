@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alert A-10482 · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="live"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <nav class="crumbs" aria-label="Breadcrumb"><a href="dashboard.html">Live</a><svg data-i="chevron-right"></svg><span class="mono">A-10482</span></nav>
+          <div class="row g3 wrap">
+            <h1 class="page-title row g2"><span class="side long" style="font-size:inherit"><svg data-i="arrow-up-right" style="width:20px;height:20px"></svg>Long</span> BTC <span class="mono w500" style="font-size:18px">0.050</span></h1>
+            <span class="pill positive"><svg data-i="circle-check"></svg>Filled</span>
+          </div>
+          <p class="page-sub">Breakout 15m · received <span class="mono">14:32:07.412</span> WAT, 11 Oct 2026 · alert id <span class="mono">bk15-1760189527</span></p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-ghost btn-sm" data-copy="A-10482" data-label="1"><svg data-i="copy"></svg><span>Copy ID</span></button>
+          <button class="btn btn-secondary btn-sm"><svg data-i="rotate-ccw"></svg>Replay as test alert</button>
+          <a class="btn btn-secondary btn-sm" href="https://testnet.monadexplorer.com/tx/0x8f3a6c1d9b2e4f7a0c5d8e1b3a6f9c2d4e7b0a1c3d5e8f2b4a6c9d1e3f5e21c" target="_blank" rel="noopener"><svg data-i="external-link"></svg>Fill on explorer</a>
+        </div>
+      </div>
+
+      <section class="kpis" aria-label="Alert versus fill">
+        <div class="kpi">
+          <div class="kpi-label">Alert price</div>
+          <div class="kpi-value mono" style="font-size:22px">112,031.0</div>
+          <div class="kpi-sub">From TradingView, BINANCE:BTCUSDT 15m</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Fill price</div>
+          <div class="kpi-value mono" style="font-size:22px">112,048.5</div>
+          <div class="kpi-sub">Perpl BTC, 1 fill, IOC</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Slippage</div>
+          <div class="kpi-value">1.6<span class="u">bps</span></div>
+          <div class="kpi-sub">Worse than alert by <span class="d secondary">$0.88</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Alert to fill</div>
+          <div class="kpi-value">612<span class="u">ms</span></div>
+          <div class="kpi-sub">Strategy median <span class="d secondary">486 ms</span></div>
+        </div>
+      </section>
+
+      <div class="grid-12" style="align-items:start">
+        <div class="span-8 col g4">
+          <!-- Lifecycle -->
+          <section class="card">
+            <div class="card-head">
+              <span class="card-title">Lifecycle</span>
+              <span class="card-meta">6 of 6 stages · 612 ms</span>
+            </div>
+            <div class="card-body" style="padding-bottom:12px" id="pipe-lg"></div>
+            <hr class="divider">
+            <div class="tl">
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:32:07.412</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Received</div><div class="tl-desc">POST from TradingView <span class="mono">52.89.214.238</span> to <span class="mono">/v1/alerts/stg_8Kq2Zr</span></div><span class="tl-time-m">14:32:07.412</span></div>
+                <span class="tl-delta">0 ms</span><span class="tl-gantt"><b style="left:0;width:2px"></b></span>
+              </div>
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:32:07.416</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Verified</div><div class="tl-desc">Secret matches. Alert id is new. Message has every required field.</div><span class="tl-time-m">14:32:07.416</span></div>
+                <span class="tl-delta">+4 ms</span><span class="tl-gantt"><b style="left:0%;width:0.7%"></b></span>
+              </div>
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:32:07.418</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Risk checks passed</div><div class="tl-desc">6 of 6 checks passed. Under the approval threshold, sent without waiting.</div><span class="tl-time-m">14:32:07.418</span></div>
+                <span class="tl-delta">+2 ms</span><span class="tl-gantt"><b style="left:0.7%;width:0.4%"></b></span>
+              </div>
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:32:07.429</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Sent to Perpl</div><div class="tl-desc">Order frame <span class="mono">mt 22</span> · <span class="mono">rq 1,904,233</span> · <span class="mono">sn 88,412</span> · last block <span class="mono">41,822,899</span></div><span class="tl-time-m">14:32:07.429</span></div>
+                <span class="tl-delta">+11 ms</span><span class="tl-gantt"><b style="left:1.1%;width:1.8%"></b></span>
+              </div>
+              <div class="tl-row" data-state="done">
+                <span class="tl-time">14:32:07.613</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Accepted</div><div class="tl-desc">Forwarded (<span class="mono">mt 3</span>), then placed in block <span class="mono">41,822,869</span> (<span class="mono">mt 24</span>, order <span class="mono">7,302,118</span>)</div><span class="tl-time-m">14:32:07.613</span></div>
+                <span class="tl-delta">+184 ms</span><span class="tl-gantt"><b style="left:2.9%;width:30.1%"></b></span>
+              </div>
+              <div class="tl-row" data-state="final">
+                <span class="tl-time">14:32:08.024</span><span class="tl-node"><i></i></span>
+                <div class="tl-body"><div class="tl-title">Filled</div><div class="tl-desc"><span class="mono">0.050 @ 112,048.5</span> in block <span class="mono">41,822,871</span> (<span class="mono">mt 25</span>) · fee <span class="mono">$1.68</span></div><span class="tl-time-m">14:32:08.024</span></div>
+                <span class="tl-delta pos">+411 ms</span><span class="tl-gantt"><b style="left:33%;width:67%"></b></span>
+              </div>
+            </div>
+            <div class="tl-gantt-axis"><span></span><span></span><span></span><span></span><span class="ax"><span>0</span><span>200</span><span>400</span><span>612 ms</span></span></div>
+          </section>
+
+          <!-- Perpl messages -->
+          <section class="card">
+            <div class="card-head">
+              <span class="card-title">Perpl messages <span class="tag mono">4</span></span>
+              <span class="card-meta">Trading socket, deduplicated</span>
+            </div>
+            <div class="table-wrap">
+              <table class="t">
+                <thead><tr><th>Time</th><th>Type</th><th>Message</th><th class="num">Block</th></tr></thead>
+                <tbody>
+                  <tr><td class="mono secondary">14:32:07.431</td><td><span class="tag mono">mt 3</span></td><td>Accepted for forwarding <span class="muted">· cid 88,412</span></td><td class="num muted">n/a</td></tr>
+                  <tr><td class="mono secondary">14:32:07.613</td><td><span class="tag mono">mt 24</span></td><td>Order placed <span class="muted">· oid 7,302,118 · IOC</span></td><td class="num">41,822,869</td></tr>
+                  <tr><td class="mono secondary">14:32:08.024</td><td><span class="tag mono">mt 25</span></td><td>Fill 0.050 @ 112,048.5 <span class="muted">· fee $1.68</span></td><td class="num">41,822,871</td></tr>
+                  <tr><td class="mono secondary">14:32:08.030</td><td><span class="tag mono">mt 26</span></td><td>Position BTC long 0.070 <span class="muted">· entry 111,998.2</span></td><td class="num">41,822,871</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="grid-12" style="gap:16px">
+            <section class="code span-6">
+              <div class="code-head"><span class="n">Raw payload</span><span class="m">from TradingView</span>
+                <div class="actions"><button class="btn btn-ghost btn-icon btn-sm" data-copy='{"strategy":"stg_8Kq2Zr"}' aria-label="Copy payload"><svg data-i="copy"></svg></button></div></div>
+<pre data-json>
+{
+  "strategy": "stg_8Kq2Zr",
+  "secret": "••••••••",
+  "id": "bk15-1760189527",
+  "market": "BTC",
+  "action": "buy",
+  "size": "0.050",
+  "price": "112031.0",
+  "leverage": 5,
+  "time": "2026-10-11T13:32:07Z"
+}</pre>
+            </section>
+            <section class="code span-6">
+              <div class="code-head"><span class="n">Order frame sent</span><span class="m">mt 22</span>
+                <div class="actions"><button class="btn btn-ghost btn-icon btn-sm" data-copy='{"mt":22}' aria-label="Copy order frame"><svg data-i="copy"></svg></button></div></div>
+<pre data-json>
+{
+  "mt": 22,
+  "sn": 88412,
+  "rq": 1904233,
+  "mkt": 16,          // BTC
+  "t": 1,             // OpenLong
+  "fl": 4,            // ImmediateOrCancel
+  "p": 112367.1,      // alert + 30 bps cap
+  "s": 0.05,
+  "lv": 500,          // 5.00x
+  "ms": 30,
+  "lb": 41822899
+}</pre>
+            </section>
+          </div>
+        </div>
+
+        <div class="span-4 col g4">
+          <section class="card">
+            <div class="card-head"><span class="card-title">Risk checks</span><span class="card-meta">6 passed</span></div>
+            <div class="checks">
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Strategy enabled</div><div class="d">Breakout 15m</div></div><span class="v">On</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Market allowed</div><div class="d">BTC is on your list</div></div><span class="v">BTC</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Max position size</div><div class="d">Position after this order</div></div><span class="v">$7,844 / $25,000</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Max leverage</div><div class="d">Requested by the alert</div></div><span class="v">5.0x / 10x</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Daily loss stop</div><div class="d">Loss so far today</div></div><span class="v">$137 / $500</span></div>
+              <div class="chk pass"><svg data-i="circle-check"></svg><div><div class="n">Approval threshold</div><div class="d">Order notional</div></div><span class="v">$5,602 / $10,000</span></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">Onchain</span><span class="card-meta">Monad testnet</span></div>
+            <div class="card-body" style="padding-top:4px;padding-bottom:4px">
+              <dl class="kv">
+                <dt>Fill tx</dt><dd><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x8f3a6c1d9b2e4f7a0c5d8e1b3a6f9c2d4e7b0a1c3d5e8f2b4a6c9d1e3f5e21c" target="_blank" rel="noopener">0x8f3a…e21c<svg data-i="arrow-up-right"></svg></a></dd>
+                <dt>Fill block</dt><dd class="mono">41,822,871</dd>
+                <dt>Placed in block</dt><dd class="mono">41,822,869</dd>
+                <dt>Perpl order</dt><dd class="mono">7,302,118</dd>
+                <dt>Request id (rq)</dt><dd class="mono">1,904,233</dd>
+                <dt>Account</dt><dd class="mono">#4821</dd>
+                <dt>Exchange</dt><dd><a class="ext mono" href="https://testnet.monadexplorer.com/address/0x1964c32f0be608e7d29302aff5e61268e72080cc" target="_blank" rel="noopener">0x1964…80cc<svg data-i="arrow-up-right"></svg></a></dd>
+              </dl>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">Order</span></div>
+            <div class="card-body" style="padding-top:4px;padding-bottom:4px">
+              <dl class="kv">
+                <dt>Type</dt><dd>Open long, immediate or cancel</dd>
+                <dt>Size</dt><dd class="mono">0.050 BTC</dd>
+                <dt>Notional</dt><dd class="mono">$5,602.43</dd>
+                <dt>Limit price</dt><dd class="mono">112,367.1</dd>
+                <dt>Max slippage</dt><dd class="mono">30 bps</dd>
+                <dt>Leverage</dt><dd class="mono">5.0x</dd>
+              </dl>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+document.getElementById('pipe-lg').innerHTML = hermesPipe(
+  [['done','0 ms'],['done','+4 ms'],['done','+2 ms'],['done','+11 ms'],['done','+184 ms'],['final','+411 ms']], 'lg', true);
+</script>
+</body>
+</html>

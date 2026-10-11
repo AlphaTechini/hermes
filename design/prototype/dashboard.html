@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live · Hermes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap">
+<link rel="stylesheet" href="../../apps/web/src/styles/tokens.css">
+<link rel="stylesheet" href="../../apps/web/src/styles/components.css">
+<link rel="stylesheet" href="prototype.css">
+<script src="icons.js"></script>
+<script src="prototype.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar" data-active="live"></aside>
+  <div class="nav-scrim"></div>
+  <div class="main">
+    <header class="topbar" data-shell="topbar"></header>
+
+    <main class="content">
+      <div class="page-head">
+        <div class="t">
+          <h1 class="page-title">Live</h1>
+          <p class="page-sub">Every TradingView alert, and what Hermes did with it.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary select hide-sm">All strategies</button>
+          <button class="btn btn-secondary" data-toast="Test alert sent|Breakout 15m · Long BTC 0.001. Watch it in the stream.|accent|send"><svg data-i="send"></svg>Send test alert</button>
+        </div>
+      </div>
+
+      <!-- Today KPIs -->
+      <section class="kpis" aria-label="Today">
+        <div class="kpi">
+          <div class="kpi-label">Alerts today</div>
+          <div class="kpi-value">47</div>
+          <div class="kpi-sub"><span>41 filled</span><span class="faint">·</span><span>4 blocked</span><span class="faint">·</span><span>2 missed</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Fill rate</div>
+          <div class="kpi-value">95.3<span class="u">%</span></div>
+          <div class="kpi-sub">41 of 43 that passed your limits</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Median alert to fill</div>
+          <div class="kpi-value">486<span class="u">ms</span></div>
+          <div class="kpi-sub">p95 <span class="d secondary">871 ms</span></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Median slippage</div>
+          <div class="kpi-value">2.1<span class="u">bps</span></div>
+          <div class="kpi-sub">vs alert price · your cap is <span class="d secondary">30 bps</span></div>
+        </div>
+      </section>
+
+      <!-- Alert stream -->
+      <section class="card">
+        <div class="card-head">
+          <span class="card-title">Alert stream</span>
+          <span class="row g2 card-meta"><span class="hm-dot" data-tone="positive" data-live="true"></span>Live</span>
+          <div class="actions">
+            <div class="seg hide-sm" role="group" aria-label="Filter by outcome">
+              <button aria-pressed="true">All <span class="c">47</span></button>
+              <button>Filled <span class="c">41</span></button>
+              <button>Blocked <span class="c">4</span></button>
+              <button>Missed <span class="c">2</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="stream" id="stream">
+          <div class="stream-head">
+            <span>Time</span><span>Signal</span><span class="c-strat">Strategy</span>
+            <span class="stages"><span>Received</span><span>Verified</span><span>Checked</span><span>Sent</span><span>Accepted</span><span>Filled</span></span>
+            <span class="right">Total</span><span>Outcome</span><span></span>
+          </div>
+        </div>
+        <div class="card-foot">
+          <span>Showing 10 of 47 alerts today · times in WAT (UTC+1)</span>
+          <a class="link" href="#">View all</a>
+        </div>
+      </section>
+
+      <div class="grid-12">
+        <!-- Positions -->
+        <section class="card span-7">
+          <div class="card-head">
+            <span class="card-title">Open positions <span class="tag mono">3</span></span>
+            <span class="card-meta">Unrealized <span class="mono pos">+$19.19</span></span>
+          </div>
+          <div class="table-wrap">
+            <table class="t">
+              <thead><tr>
+                <th>Market</th><th>Side</th><th class="num">Size</th><th class="num hide-sm">Notional</th><th class="num hide-sm">Entry</th><th class="num">Mark</th><th class="num">Unrealized PnL</th><th class="num hide-sm">Lev.</th>
+              </tr></thead>
+              <tbody>
+                <tr><td><span class="mkt">BTC</span></td><td><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span></td><td class="num">0.070</td><td class="num hide-sm">$7,843.59</td><td class="num hide-sm">111,998.2</td><td class="num">112,051.3</td><td class="num pos">+$3.72 <span class="muted">+0.05%</span></td><td class="num hide-sm">5.0x</td></tr>
+                <tr><td><span class="mkt">ETH</span></td><td><span class="side short"><svg data-i="arrow-down-right"></svg>Short</span></td><td class="num">1.20</td><td class="num hide-sm">$4,924.92</td><td class="num hide-sm">4,098.62</td><td class="num">4,104.10</td><td class="num neg">&minus;$6.58 <span class="muted">&minus;0.13%</span></td><td class="num hide-sm">5.0x</td></tr>
+                <tr><td><span class="mkt">MON</span></td><td><span class="side long"><svg data-i="arrow-up-right"></svg>Long</span></td><td class="num">150,000</td><td class="num hide-sm">$6,039.75</td><td class="num hide-sm">0.040118</td><td class="num">0.040265</td><td class="num pos">+$22.05 <span class="muted">+0.37%</span></td><td class="num hide-sm">3.0x</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-foot">
+            <span>Margin used <span class="mono secondary">$3,761.65</span> of <span class="mono secondary">$10,482.16</span> equity</span>
+            <span class="mono">Perpl account #4821</span>
+          </div>
+        </section>
+
+        <!-- Recent fills -->
+        <section class="card span-5">
+          <div class="card-head">
+            <span class="card-title">Recent fills</span>
+            <div class="actions"><a class="link xs" href="report.html">Report card</a></div>
+          </div>
+          <div class="table-wrap">
+            <table class="t compact">
+              <thead><tr><th>Fill</th><th class="num">Price</th><th class="num">Slippage</th><th class="num">Tx</th></tr></thead>
+              <tbody>
+                <tr><td><span class="row g2"><span class="mkt">BTC</span><span class="col"><span class="side long xs">Long 0.050</span><span class="mono xxs muted">14:32:08</span></span></span></td><td class="num">112,048.5</td><td class="num ">1.6 bps</td><td class="num"><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x8f3ae21c" target="_blank" rel="noopener">0x8f3a…e21c<svg data-i="arrow-up-right"></svg></a></td></tr>
+                <tr><td><span class="row g2"><span class="mkt">ETH</span><span class="col"><span class="side short xs">Short 1.20</span><span class="mono xxs muted">14:29:51</span></span></span></td><td class="num">4,098.62</td><td class="num ">0.9 bps</td><td class="num"><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x41c09a07" target="_blank" rel="noopener">0x41c0…9a07<svg data-i="arrow-up-right"></svg></a></td></tr>
+                <tr><td><span class="row g2"><span class="mkt">MON</span><span class="col"><span class="side long xs">Long 150,000</span><span class="mono xxs muted">14:05:11</span></span></span></td><td class="num">0.040118</td><td class="num ">4.8 bps</td><td class="num"><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0xd27e03bf" target="_blank" rel="noopener">0xd27e…03bf<svg data-i="arrow-up-right"></svg></a></td></tr>
+                <tr><td><span class="row g2"><span class="mkt">BTC</span><span class="col"><span class="side secondary xs">Close 0.050</span><span class="mono xxs muted">13:44:40</span></span></span></td><td class="num">111,872.0</td><td class="num ">2.3 bps</td><td class="num"><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x9b15c4d2" target="_blank" rel="noopener">0x9b15…c4d2<svg data-i="arrow-up-right"></svg></a></td></tr>
+                <tr><td><span class="row g2"><span class="mkt">SOL</span><span class="col"><span class="side secondary xs">Close 30.0</span><span class="mono xxs muted">13:20:15</span></span></span></td><td class="num">210.118</td><td class="num pos" title="Filled 0.4 bps better than the alert price">&minus;0.4 bps</td><td class="num"><a class="ext mono" href="https://testnet.monadexplorer.com/tx/0x6ae37710" target="_blank" rel="noopener">0x6ae3…7710<svg data-i="arrow-up-right"></svg></a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+/* Alert stream data. stage tuple: [state, delta]. States: done active final blocked failed pending skipped */
+const S = (st) => st;
+const alerts = [
+  { id:'A-10483', t:'14:32:18.904', r:'now', side:'long', mkt:'BTC', size:'0.020', px:'$2,241', strat:'Breakout 15m', sub:'Alert 112,060.0',
+    stages:[['done','0'],['done','+3'],['done','+2'],['done','+12'],['active','…'],['pending','']], total:'201 ms', live:true,
+    status:['accent','In flight','<span class="hm-dot" data-tone="accent" data-live="true"></span>'], why:'Waiting for Perpl fill' },
+  { id:'A-10482', t:'14:32:07.412', r:'12s ago', side:'long', mkt:'BTC', size:'0.050', px:'$5,602', strat:'Breakout 15m', sub:'Alert 112,031.0',
+    stages:[['done','0'],['done','+4'],['done','+2'],['done','+11'],['done','+184'],['final','+411']], total:'612 ms',
+    status:['positive','Filled','<svg data-i="circle-check"></svg>'], why:'<span class="mono">112,048.5 · 1.6 bps</span>', href:'alert.html' },
+  { id:'A-10481', t:'14:29:51.077', r:'2m ago', side:'short', mkt:'ETH', size:'1.20', px:'$4,918', strat:'ETH mean reversion 1h', sub:'Alert 4,102.30',
+    stages:[['done','0'],['done','+3'],['done','+2'],['done','+9'],['done','+161'],['final','+363']], total:'538 ms',
+    status:['positive','Filled','<svg data-i="circle-check"></svg>'], why:'<span class="mono">4,098.62 · 0.9 bps</span>' },
+  { id:'A-10480', t:'14:21:33.250', r:'11m ago', side:'long', mkt:'SOL', size:'140.0', px:'$29,458', strat:'SOL momentum 5m', sub:'Alert 210.412',
+    stages:[['done','0'],['done','+4'],['blocked','+1'],['skipped',''],['skipped',''],['skipped','']], total:'5 ms',
+    status:['warning','Blocked','<svg data-i="octagon-x"></svg>'], why:'Over max position size', href:'alert-blocked.html' },
+  { id:'A-10479', t:'14:18:02.611', r:'14m ago', side:'short', mkt:'BTC', size:'0.120', px:'$13,445', strat:'Breakout 15m', sub:'Alert 112,044.0',
+    stages:[['done','0'],['done','+3'],['done','+2'],['pending','wait'],['pending',''],['pending','']], total:'',
+    status:['accent','Needs approval','<svg data-i="hand"></svg>'], why:'1:42 left to approve', href:'approvals.html' },
+  { id:'A-10478', t:'14:12:44.019', r:'20m ago', side:'short', mkt:'SOL', size:'40.0', px:'$8,395', strat:'SOL momentum 5m', sub:'Alert 209.871',
+    stages:[['done','0'],['done','+4'],['done','+2'],['done','+10'],['done','+176'],['failed','+302']], total:'494 ms',
+    status:['negative','Not filled','<svg data-i="circle-x"></svg>'], why:'No liquidity within 30 bps' },
+  { id:'A-10477', t:'14:05:10.388', r:'27m ago', side:'long', mkt:'MON', size:'150,000', px:'$6,018', strat:'MON trend 1h', sub:'Alert 0.040099',
+    stages:[['done','0'],['done','+5'],['done','+2'],['done','+13'],['done','+212'],['final','+469']], total:'701 ms',
+    status:['positive','Filled','<svg data-i="circle-check"></svg>'], why:'<span class="mono">0.040118 · 4.8 bps</span>' },
+  { id:'A-10476', t:'13:58:27.902', r:'34m ago', side:'long', mkt:'ZEC', size:'10.0', px:'$2,874', strat:'ZEC breakout 4h', sub:'Alert 287.40',
+    stages:[['done','0'],['done','+3'],['blocked','+1'],['skipped',''],['skipped',''],['skipped','']], total:'4 ms',
+    status:['warning','Blocked','<svg data-i="octagon-x"></svg>'], why:'ZEC is not an allowed market' },
+  { id:'A-10475', t:'13:51:03.144', r:'41m ago', side:'long', mkt:'BTC', size:'0.050', px:'$5,595', strat:'Breakout 15m', sub:'Alert 111,902.0',
+    stages:[['done','0'],['blocked','+2'],['skipped',''],['skipped',''],['skipped',''],['skipped','']], total:'2 ms',
+    status:['','Ignored','<svg data-i="copy"></svg>'], why:'Duplicate of A-10474' },
+  { id:'A-10474', t:'13:44:39.520', r:'48m ago', side:'close', mkt:'BTC', size:'0.050', px:'$5,594', strat:'Breakout 15m', sub:'Alert 111,898.0',
+    stages:[['done','0'],['done','+3'],['done','+2'],['done','+10'],['done','+148'],['final','+292']], total:'455 ms',
+    status:['positive','Filled','<svg data-i="circle-check"></svg>'], why:'<span class="mono">111,872.0 · 2.3 bps</span>' },
+];
+const sideHtml = (a) => a.side === 'long'
+  ? `<span class="side long"><svg data-i="arrow-up-right"></svg>Long</span>`
+  : a.side === 'short' ? `<span class="side short"><svg data-i="arrow-down-right"></svg>Short</span>`
+  : `<span class="side secondary"><svg data-i="minus"></svg>Close long</span>`;
+document.getElementById('stream').insertAdjacentHTML('beforeend', alerts.map(a => `
+  <a class="stream-row${a.live ? ' hm-row-in' : ''}" href="${a.href || 'alert.html'}" aria-label="Alert ${a.id}">
+    <span class="time"><span class="a">${a.t}</span><span class="r">${a.r}</span></span>
+    <span class="sig"><span class="a">${sideHtml(a)}<span class="mkt">${a.mkt}</span></span><span class="b">${a.size} <span class="faint">·</span> ${a.px}</span></span>
+    <span class="strat"><span class="a">${a.strat}</span><span class="b">${a.sub}</span></span>
+    ${hermesPipe(a.stages.map(s => [s[0], s[1] === '' ? '' : (s[1] === '…' || s[1] === 'wait' ? (s[1] === 'wait' ? 'waiting' : '…') : s[1] + ' ms')]))}
+    <span class="total${a.total ? '' : ' dim'}">${a.total || 'n/a'}</span>
+    <span class="status"><span class="pill ${a.status[0]}">${a.status[2]}${a.status[1]}</span><span class="why">${a.why}</span></span>
+    <svg class="chev" data-i="chevron-right"></svg>
+    <span class="mob"><span class="mono">${a.t.slice(0,8)}</span><span class="truncate">${a.strat}</span><span class="mono">${a.total || ''}</span></span>
+  </a>`).join(''));
+</script>
+</body>
+</html>
