@@ -915,3 +915,7 @@ details.how p { font-size: 12px; line-height: 18px; color: var(--text-muted); ma
   .kpis.k3 .kpi:nth-child(odd), .kpis.k6 .kpi:nth-child(odd) { border-left: 0; }
   .kpis.k3 .kpi:nth-child(-n+2), .kpis.k6 .kpi:nth-child(-n+2) { border-top: 0; }
 }
+@media (max-width: 767px) {
+  .code-head { height: auto; min-height: 36px; flex-wrap: wrap; row-gap: 4px; padding: 4px 6px 4px 10px; }
+  .appr-stats .s { white-space: normal; }
+}
