@@ -82,7 +82,8 @@ export function buildPolicyCreateParams(spec: HermesPolicySpec, ownerKeyQuorumId
     owner_id: ownerKeyQuorumId, // the Hermes key quorum can later amend/delete this policy
     rules: [
       {
-        name: "Perpl Exchange: createAccount / depositCollateral / allowOrderForwarding",
+        // Privy caps rule names below 50 characters.
+        name: "Perpl Exchange: account setup and deposits",
         method: "eth_sendTransaction",
         action: "ALLOW",
         conditions: [...common, tx("to", "in", addressVariants(spec.exchange))],

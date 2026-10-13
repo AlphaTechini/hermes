@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { PrivyProvider, usePrivy, useSendTransaction, useSigners, useWallets } from "@privy-io/react-auth";
+import { PrivyProvider, usePrivy, useSendTransaction, useSignTypedData, useSigners, useWallets } from "@privy-io/react-auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { monadTestnet } from "viem/chains";
 import type { UserDTO } from "@hermes/shared";
 import { post, setAccessTokenGetter } from "../lib/api";
 import { qk } from "../lib/queries";
 import { useTheme } from "../lib/theme";
-import { AuthContext, type AuthContextValue, type WalletTx } from "./context";
+import { AuthContext, type AuthContextValue, type TypedDataInput, type WalletTx } from "./context";
 
 // The Hermes mark (see MARK in design/prototype/prototype.js), as a data URI for the Privy dialog header.
 const LOGO =
@@ -48,6 +48,7 @@ function PrivyBridge({ children }: { children: ReactNode }) {
   const { wallets, ready: walletsReady } = useWallets();
   const { sendTransaction: privySend } = useSendTransaction();
   const { addSigners } = useSigners();
+  const { signTypedData: privySignTypedData } = useSignTypedData();
 
   // Set during render (idempotent) so child effects that fire queries already have the token getter.
   setAccessTokenGetter(getAccessToken);
@@ -91,6 +92,19 @@ function PrivyBridge({ children }: { children: ReactNode }) {
     [address, privySend],
   );
 
+  const signTypedData = useCallback(
+    async (typedData: TypedDataInput) => {
+      if (!address) throw new Error("Your wallet is not ready yet.");
+      // Privy types `domain.salt` as ArrayBuffer; Perpl sends a 0x bytes32 string, which the signer accepts as is.
+      const { signature } = await privySignTypedData(typedData as Parameters<typeof privySignTypedData>[0], {
+        address,
+        uiOptions: { title: "Create your Perpl API key", description: "Lets Hermes trade on your Perpl account. It can never withdraw." },
+      });
+      return signature;
+    },
+    [address, privySignTypedData],
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       ready,
@@ -99,12 +113,12 @@ function PrivyBridge({ children }: { children: ReactNode }) {
       login: () => login(),
       logout: doLogout,
       mode: "privy",
-      wallet: { address, ready: walletsReady && Boolean(address), sendTransaction },
+      wallet: { address, ready: walletsReady && Boolean(address), sendTransaction, signTypedData },
       addSigners: async (args) => {
         await addSigners(args);
       },
     }),
-    [ready, authenticated, email, address, login, doLogout, walletsReady, sendTransaction, addSigners],
+    [ready, authenticated, email, address, login, doLogout, walletsReady, sendTransaction, signTypedData, addSigners],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

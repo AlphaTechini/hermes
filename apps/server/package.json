@@ -11,7 +11,8 @@
     "test": "vitest run",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
     "privy:bootstrap": "tsx src/privy/bootstrap.ts",
-    "demo:alerts": "tsx src/scripts/demo-alerts.ts"
+    "demo:alerts": "tsx src/scripts/demo-alerts.ts",
+    "cloudrun:env": "tsx src/scripts/cloudrun-env.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",

@@ -10,6 +10,7 @@ import { PERPL_API_KEYS_URL } from "../wallet/hooks";
 import { ApiKeyForm, MetaParts } from "../wallet/parts";
 import { ArrowUpRight } from "lucide-react";
 import type { StepProps } from "./types";
+import { CreateKeyCard } from "./CreateKeyCard";
 
 /** Step 3: paste the Perpl trade-only API key. The server validates it against Perpl before saving. */
 export function StepKey({ go, keyDone }: StepProps) {
@@ -26,8 +27,11 @@ export function StepKey({ go, keyDone }: StepProps) {
         <p className="lead">Hermes signs in to Perpl's trading socket with this key to place your orders.</p>
       </div>
 
+      {showForm && c?.mode === "live" && <CreateKeyCard onSaved={() => setReplacing(false)} />}
+
       <Card>
         <CardBody>
+          {c?.mode === "live" && <p className="m" style={{ marginTop: 0 }}>Or create one on Perpl and paste it:</p>}
           <ol className="steps-list">
             <li>
               <span>

@@ -64,7 +64,14 @@ export function DevAuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       mode: "dev",
-      wallet: { address: authenticated ? address : null, ready: authenticated && Boolean(address), sendTransaction },
+      wallet: {
+        address: authenticated ? address : null,
+        ready: authenticated && Boolean(address),
+        sendTransaction,
+        signTypedData: async () => {
+          throw new Error("DEV mode has no wallet to sign with.");
+        },
+      },
       addSigners: async () => {},
     }),
     [authenticated, me.data?.email, address, login, logout, sendTransaction],

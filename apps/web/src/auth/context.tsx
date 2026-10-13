@@ -30,6 +30,14 @@ export interface WalletTxResult {
   actionId?: string;
 }
 
+/** EIP-712 payload without `EIP712Domain` in `types` (the server prepares it). */
+export interface TypedDataInput {
+  domain: Record<string, unknown>;
+  types: Record<string, { name: string; type: string }[]>;
+  primaryType: string;
+  message: Record<string, unknown>;
+}
+
 export interface AuthContextValue {
   ready: boolean;
   authenticated: boolean;
@@ -41,6 +49,8 @@ export interface AuthContextValue {
     address: string | null;
     ready: boolean;
     sendTransaction: (tx: WalletTx) => Promise<WalletTxResult>;
+    /** EIP-712 signature from the embedded wallet. DEV mode has no wallet and rejects. */
+    signTypedData: (typedData: TypedDataInput) => Promise<string>;
   };
   /** Privy `useSigners().addSigners`; DEV mode resolves without doing anything. */
   addSigners: (args: { address: string; signers: { signerId: string; policyIds: string[] }[] }) => Promise<void>;

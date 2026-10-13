@@ -30,7 +30,7 @@ async function main() {
   if (!appId || !appSecret) {
     throw new Error("PRIVY_APP_ID and PRIVY_APP_SECRET are required (Privy dashboard > App settings > Basics).");
   }
-  const ttlDays = Number(process.env.PRIVY_POLICY_TTL_DAYS ?? "30");
+  const ttlDays = Number(process.env.PRIVY_POLICY_TTL_DAYS || "30");
   if (!Number.isFinite(ttlDays) || ttlDays <= 0) throw new Error("PRIVY_POLICY_TTL_DAYS must be a positive number");
 
   const config = loadConfig({ ...process.env, NODE_ENV: "development", AUTH_MODE: "dev" });

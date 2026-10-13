@@ -35,6 +35,7 @@ import type { Repos } from "../db/repos";
 import type { EventBus } from "../events/bus";
 import { HermesError, notFound } from "../errors";
 import type { Ingest } from "../ingest/handler";
+import { PerplEnrollment } from "../perpl/enroll";
 import type { PerplRuntime } from "../perpl/runtime";
 import type { Pipeline } from "../pipeline/pipeline";
 import { buildReportCard, priorWindow, rangeStart } from "../reports/report-card";
@@ -427,6 +428,32 @@ export function apiRoutes(app: FastifyInstance, deps: ApiDeps): void {
         accountId = await rt.lookupAccount(req.user.id, { apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate }, wallet);
       }
       return saveConnection(req.user.id, { accountId, apiKeyPublic: body.apiKeyPublic, apiKeyPrivate: body.apiKeyPrivate });
+    });
+    // Live only: create the API key with the user's own wallet instead of pasting one from testnet.perpl.xyz.
+    const enrollment = new PerplEnrollment({ apiBase: config.perplApiBase, chainId: 10143 });
+    const walletOf = (userId: string, fromToken: string | null | undefined) =>
+      fromToken ??
+      (repos.db.prepare("SELECT address FROM privy_wallets WHERE user_id = ?").get(userId) as { address: string } | undefined)?.address ??
+      null;
+    const requireLive = () => {
+      if (config.perplMode !== "live") {
+        throw new HermesError(404, "not_available", "Creating a Perpl key from Hermes is only available with PERPL_MODE=live.");
+      }
+    };
+    api.post("/api/perpl/enroll/start", async (req) => {
+      requireLive();
+      const address = walletOf(req.user.id, req.user.walletAddress);
+      if (!address) throw new HermesError(409, "wallet_missing", "Your wallet is not ready yet.");
+      return { address, typedData: await enrollment.start(req.user.id, address) };
+    });
+    api.post("/api/perpl/enroll/finish", async (req) => {
+      requireLive();
+      const { signature } = parse(z.object({ signature: z.string().trim().min(10).max(1000) }), req.body);
+      const creds = await enrollment.finish(req.user.id, signature);
+      const rt = perpl();
+      if (!rt?.lookupAccount) throw new HermesError(503, "perpl_unreachable", "The Perpl integration is not running.");
+      const accountId = await rt.lookupAccount(req.user.id, creds, walletOf(req.user.id, req.user.walletAddress));
+      return saveConnection(req.user.id, { accountId, ...creds });
     });
     api.delete("/api/perpl/connection", async (req) => {
       repos.connections.delete(req.user.id);
