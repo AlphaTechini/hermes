@@ -1,0 +1,20 @@
+# gcloud builds submit --config cloudbuild.yaml --substitutions=_VITE_PRIVY_APP_ID=<public Privy app id>
+substitutions:
+  _REGION: europe-west1
+  _REPO: hermes
+  _IMAGE: hermes
+  _VITE_PRIVY_APP_ID: ""
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=VITE_PRIVY_APP_ID=${_VITE_PRIVY_APP_ID}
+      - -t=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:latest
+      - .
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_IMAGE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

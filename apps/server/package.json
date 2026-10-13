@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@fastify/cors": "11.3.1",
+    "@fastify/static": "10.1.6",
     "@hermes/perpl": "workspace:*",
     "@hermes/shared": "workspace:*",
     "@privy-io/node": "0.35.0",

@@ -23,6 +23,7 @@ import { specFromConfig } from "./privy/policy";
 import { PrivyService } from "./privy/privy-service";
 import { walletRoutes } from "./privy/routes";
 import type { WalletService } from "./privy/types";
+import { registerWebApp } from "./web/static";
 
 export interface BuildAppOptions {
   config: Config;
@@ -124,9 +125,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<HermesApp> {
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ error: { code: "internal_error", message: "Internal server error" } });
   });
-  app.setNotFoundHandler((_req, reply) => {
-    reply.code(404).send({ error: { code: "not_found", message: "Route not found" } });
-  });
+  if (config.webDistDir) {
+    await registerWebApp(app, config.webDistDir);
+  } else {
+    app.setNotFoundHandler((_req, reply) => {
+      reply.code(404).send({ error: { code: "not_found", message: "Route not found" } });
+    });
+  }
 
   const walletService: WalletService =
     opts.walletService ??

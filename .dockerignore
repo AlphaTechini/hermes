@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/data
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.github
+design
+docs
+**/*.md
+**/test
+**/*.test.ts
+**/*.test.tsx
+**/coverage
+**/.vite

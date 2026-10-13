@@ -40,6 +40,7 @@ const EnvSchema = z.object({
   PRIVY_APP_SECRET: opt(z.string()),
   AUTH_MODE: opt(z.enum(["privy", "dev"])),
   WEB_ORIGIN: z.preprocess(emptyToUndef, z.string().default("http://localhost:5173")),
+  WEB_DIST_DIR: opt(z.string()),
 });
 
 /** Hermes Privy wallet module settings (server signer, policy mirror). */
@@ -79,6 +80,8 @@ export interface Config {
   privyWallet: PrivyWalletConfig;
   authMode: "privy" | "dev";
   webOrigin: string;
+  /** Built web app to serve from this server (single-origin deploy). Unset in development, where Vite serves it. */
+  webDistDir: string | undefined;
   warnings: string[];
 }
 
@@ -174,6 +177,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, options: LoadCo
     },
     authMode,
     webOrigin: e.WEB_ORIGIN,
+    webDistDir: e.WEB_DIST_DIR,
     warnings,
   };
 }
