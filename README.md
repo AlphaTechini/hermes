@@ -4,6 +4,8 @@
 
 A trader who already uses TradingView alerts points them at a Hermes webhook. Hermes checks that each alert is genuine, not a repeat and inside the trader's risk limits, places the order on Perpl over its trading WebSocket, and tracks it until it fills or fails. A per-strategy report card then compares the alert price with the fill price, the alert-to-fill time, and every alert that did not become a trade, with the reason.
 
+**Live app:** https://hermes-361463520533.europe-west1.run.app (Monad testnet; the server sleeps when idle and starts with a fresh database).
+
 Built for the Monad Metropolis hackathon. Main track: Onchain Finance & Trading. Bounties: Perpl "Best use of Perpl's API", Privy, and Perpl "Best Analytics / Risk Tool".
 
 | | |
@@ -103,7 +105,7 @@ Per strategy: alert price against fill price (slippage in bps, with a histogram)
 - Perpl's order book and settlement are on-chain on Monad. Every fill Hermes reports has a transaction hash you can open in the explorer.
 - Low fees make small strategy orders and per-alert setup transactions practical on testnet.
 
-We state measured latency only from live runs. The figures in the table below are filled in after the live run.
+We state measured latency only from live runs. First live run (14 Oct 2026, Cloud Run in europe-west1, Perpl testnet): 4 fills, median alert-to-fill 989 ms, p95 1.11 s, median slippage 0.7 bps against the alert price.
 
 ## Monad proof
 
@@ -117,11 +119,12 @@ Explorer link format: `https://testnet.monadexplorer.com/tx/<hash>`
 
 | # | What | Signed by | Transaction |
 |---|---|---|---|
-| 1 | AUSD `approve(Exchange, amount)` | user's Privy wallet, via Hermes signer under the policy | TODO: fill after live run |
-| 2 | Exchange `createAccount(amount)` | user's Privy wallet, via Hermes signer under the policy | TODO: fill after live run |
-| 3 | Exchange `allowOrderForwarding(true)` | user's Privy wallet, via Hermes signer under the policy | TODO: fill after live run |
-| 4 | Order fill from a TradingView alert (`mt 25` fill, `at.txid`) | Perpl, on the user's account | TODO: fill after live run |
-| 5 | Privy policy-denied attempt | Hermes server signer | No hash, the transaction is never broadcast. Privy error recorded as `denied_by_policy`: TODO: paste the error text after live run |
+| 0 | Agora faucet `requestFunds(wallet)` (test AUSD) | user's Privy wallet, via Hermes signer under the policy | [`0x76bb26cc…839055`](https://testnet.monadexplorer.com/tx/0x76bb26ccbba60d5a015e3d4da9832ee3af4ee31cf0d91ee667d2ace846839055) |
+| 1 | AUSD `approve(Exchange, amount)` | user's Privy wallet, via Hermes signer under the policy | [`0xe47bbd56…9cd655`](https://testnet.monadexplorer.com/tx/0xe47bbd56e05162c22b5c68c829d25eee0268add02306df474f2fc096c99cd655) |
+| 2 | Exchange `createAccount(amount)` | user's Privy wallet, via Hermes signer under the policy | [`0x8bee38e8…4fbd4b`](https://testnet.monadexplorer.com/tx/0x8bee38e860a8346e071881c939e13882b994fba223b8520c1f0e41d3d34fbd4b) |
+| 3 | Exchange `allowOrderForwarding(true)` | user's Privy wallet, via Hermes signer under the policy | [`0x960262ab…b401f3`](https://testnet.monadexplorer.com/tx/0x960262ab31b9df852eaf8e33a9baba19da1744e916e431b4ed51e15f91b401f3) |
+| 4 | Order fill from a TradingView alert (`mt 25` fill, `at.txid`) | Perpl, on the user's account (account #1292, Long BTC 0.001 at 83,191.8) | [`0x6cc74464…896535`](https://testnet.monadexplorer.com/tx/0x6cc744641d88b4a5016280dfcac41cc2af4415a9108a85e04169210008896535) |
+| 5 | Privy policy-denied attempt | Hermes server signer | No hash, the transaction is never broadcast. Privy answered `400 {"error":"RPC request denied due to policy violation","code":"policy_violation"}` and Hermes recorded `denied_by_policy` |
 
 ## Quick start (simulator mode, no external accounts)
 
@@ -363,10 +366,10 @@ Last measured: 503 tests passing. Typecheck and lint were clean in all four work
 ## Honest limitations
 
 - **The build sandbox could not reach `testnet.perpl.xyz` or the Monad RPC.** The Perpl code was written from the published API docs and cross-checked against a working third-party integration. It is tested against the simulator, which speaks the same protocol (same frames, statuses, heartbeats, rate limits, close codes), but it has not been run against live Perpl in this repository's history before the live run recorded in [docs/SUBMISSION.md](docs/SUBMISSION.md). The simulator has synthetic prices and fills at mark plus or minus at most 8 bps, so slippage and latency figures from it say nothing about live behaviour. It does not model funding, liquidation, trigger orders or builder fees.
-- **Privy policy syntax is not verified against the live API.** The docs site was unreachable while building. Rule and condition shapes were checked against the `@privy-io/node` 0.35.0 type definitions. Still to confirm on the first live run: the `ethereum_calldata` field names (`approve.spender`, `approve.amount`), address case handling in conditions, and the exact error Privy returns on a policy denial (Hermes treats a 4xx whose message mentions a policy as a denial).
+- **Privy policy: verified on the first live run.** Privy accepted the policy (rule names must be under 50 characters, fixed during the run), allowed the faucet, `approve`, `createAccount` and `allowOrderForwarding` transactions above, and refused the policy demo with `400 policy_violation`. Address case handling in conditions was not tested separately.
 - **Perpl details still unverified:** whether server-side API key enrolment works without a whitelisted Origin (Hermes uses the paste-in key as the supported path); whether testnet answers 451 to US IPs; the live collateral token and minimum (read at runtime); how many AUSD the Agora faucet pays out and whether it is funded; whether the `lb: 0` order window equals `order_ttl_blocks` (Hermes assumes a block window of `ttl + 5` for timeouts); whether heartbeats arrive on the trading socket every block (otherwise Hermes falls back to the market-data heartbeat and REST); what Perpl re-emits when an executed `rq` is re-sent. Full list: [packages/perpl/README.md](packages/perpl/README.md#known-uncertainties-from-perplmd-plus-ours) and [docs/research/perpl.md](docs/research/perpl.md).
 - **Scope.** Market orders only (IOC with a slippage cap). No native stop-loss or take-profit orders, no limit orders, no Pine Script execution, no mainnet, one net position per market. Strategy reversals in a single TradingView order are read as an open, not close-then-open.
-- **Latency is not yet measured on live Perpl.** Treat any figure in the screenshots as sample data.
+- **Latency is measured on one short live run only** (4 fills, see [Why Monad](#why-monad)). The design screenshots above still show sample data.
 - **Missed deliveries are invisible.** TradingView documents no retries. If it fails to deliver an alert, Hermes never sees it, and the report card cannot count what it did not receive.
 
 ## AI tools disclosure

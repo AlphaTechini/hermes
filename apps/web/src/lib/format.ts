@@ -280,7 +280,8 @@ export function shortId(value: string | null | undefined, head = 8, tail = 3): s
 }
 export const shortHash = shortHex;
 
-export const explorerTxUrl = (hash: string): string => `${EXPLORER_BASE}/tx/${hash}`;
+// Perpl fill frames (`mt 25` at.txid) carry the hash without 0x; the explorer needs it.
+export const explorerTxUrl = (hash: string): string => `${EXPLORER_BASE}/tx/${hash.startsWith("0x") ? hash : `0x${hash}`}`;
 export const explorerAddressUrl = (address: string): string => `${EXPLORER_BASE}/address/${address}`;
 
 /** `••••••••••••••••••••hx2K`: mask everything except the last 4 characters. */
