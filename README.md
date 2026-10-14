@@ -22,7 +22,7 @@ Docs: [Demo video script](docs/DEMO.md) | [Submission checklist and bounty mappi
 ## The problem
 
 - Many traders build their strategies and alerts on TradingView. When an alert fires they still have to open Perpl and place the trade by hand. If they are asleep, busy or offline they miss it, or they enter late at a worse price.
-- Tools that turn TradingView alerts into trades exist for Hyperliquid and the large centralised exchanges. We found none for Perpl.
+- On [Bybit](https://www.bybit.com/en/help-center/article/How-to-Use-and-Setup-Webhook-Signal-Trading-on-Bybit) and [Bitget](https://www.bitget.com/support/articles/12560603823395), a TradingView alert can already place a futures order by itself, and OKX has a [TradingView signal bot](https://www.fintechfutures.com/press-releases/flash-news-okx-debuts-signal-trading-bot-enabling-signal-providers-and-traders-to-create-custom-signals). We found nothing like it for Perpl.
 - Traders also never see whether the live result matched the chart: how much price they lost between the alert and the fill, how long it took, and which alerts never became trades.
 
 **Who it is for:** a trader who already uses TradingView alerts and wants them executed on Perpl automatically, with hard safety limits, without writing a bot.
